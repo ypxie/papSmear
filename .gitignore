@@ -1,0 +1,25 @@
+*.DS_Store
+*.pyc
+*py~
+*.pth
+Data/*
+Model/*
+models/*
+*.swp
+.vscode
+*~
+temp/*
+# test-related
+.coverage
+.cache
+# developer environments
+.idea
+.ipython*
+*/.ipynb*
+*/.ipynb_checkpoints/*
+Models/
+inception-score/inception_finetuned_models/*
+inception-score/results/*
+demo/text_encoder/*
+.remote-sync.json
+test.py
