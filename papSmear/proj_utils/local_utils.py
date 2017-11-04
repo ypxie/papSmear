@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 import numpy as np
 import os, math
 from PIL import Image
@@ -24,6 +23,7 @@ import scipy.misc as misc
 def get(identifier):
     return get_from_module(identifier, globals(), 'local_utils')
 
+
 def mkdirs(folders, erase=False):
     if type(folders) is not list:
         folders = [folders]
@@ -34,7 +34,8 @@ def mkdirs(folders, erase=False):
             if erase:
                 shutil.rmtree(fold)
                 os.makedirs(fold)
-                
+
+
 class myobj(object):
     pass
 
@@ -80,7 +81,7 @@ def auc(x, y, reorder=False):
     #check_consistent_length(x, y)
     #x = column_or_1d(x)
     #y = column_or_1d(y)
-    
+
     x, y = np.asarray(x), np.asarray(y)
     if x.shape[0] < 2:
         raise ValueError('At least 2 points are needed to compute'
@@ -115,31 +116,31 @@ def normalize_img(X):
     X = (X - min_)/ (max_ - min_ + 1e-9)
     X = X*255
     return X.astype(np.uint8)
-    
+
 def imread(imgfile):
     assert os.path.exists(imgfile), '{} does not exist!'.format(imgfile)
     srcBGR = cv2.imread(imgfile)
     destRGB = cv2.cvtColor(srcBGR, cv2.COLOR_BGR2RGB)
     return destRGB
 
-def writeImg(array, savepath):      
+def writeImg(array, savepath):
     scipy.misc.imsave(savepath, array)
     #cv2.imwrite(savepath,  array)
-    
+
 def SaveFigureAsImage(fileName,fig=None,**kwargs):
     ''' Save a Matplotlib figure as an image without borders or frames.
        Args:
             fileName (str): String that ends in .png etc.
 
-            fig (Matplotlib figure instance): figure you want to 
+            fig (Matplotlib figure instance): figure you want to
             save as the image
         Keyword Args:
-            orig_size (tuple): width, height of the original image 
+            orig_size (tuple): width, height of the original image
             used to maintain
             aspect ratio.
 			SaveFigureAsImage('out.png', plt.gcf() )
 
-		# Here plt.gcf() gets a handle to your current figure. 
+		# Here plt.gcf() gets a handle to your current figure.
         You could also save this like so:
 		# myFig = figure(2)  if you needed the second figure.
 
@@ -167,7 +168,7 @@ def SaveFigureAsImage(fileName,fig=None,**kwargs):
 def roipoly(rowsize,colsize,xcontour,ycontour):
     xcontour = xcontour.reshape((-1,))
     ycontour = ycontour.reshape((-1,))
-    contour = np.concatenate([xcontour.reshape((-1,1)), 
+    contour = np.concatenate([xcontour.reshape((-1,1)),
                               ycontour.reshape((-1,1))], axis = -1)
     #polyvet = np.zeros((2*xcontour.shape[0],))
     #polyvet[0::2] = ycontour
@@ -257,10 +258,10 @@ def imresize_shape(img, outshape):
             transpose_img = np.transpose(img, (1,2,0))
             _img =  imresize_shape(transpose_img, outshape)
             return np.transpose(_img, (2,0, 1))
-    if len(img.shape) == 4: 
+    if len(img.shape) == 4:
         img_out = []
         for this_img in img:
-            img_out.append( imresize_shape(this_img, outshape) ) 
+            img_out.append( imresize_shape(this_img, outshape) )
         return np.stack(img_out, axis=0)
 
     img = img.astype(np.float32)
@@ -296,7 +297,7 @@ def pre_process_img(img, yuv = False, mode = 'vanilla', norm = True):
             this_min, this_max, this_mean = np.min(img[:]), np.max(img[:]),np.mean(img[:])
             img = (img - this_min) / ( this_max- this_min + 1e-8)
             img = img - np.mean(img)
-            
+
         elif mode == 'vanilla':
             img = img.astype(np.float32)/255
             img = (img - 0.5)/0.5
@@ -365,6 +366,7 @@ def getfileinfo(imgdir, contourextList, ImgExtList, LabelExt, test_mode = False)
     '''
     alllist  = [f for f in os.listdir(imgdir)]
     alllist = sorted(alllist)
+
     returnList = []
     for f in alllist:
         if os.path.isfile(os.path.join(imgdir,f)) and \
@@ -380,7 +382,7 @@ def getfileinfo(imgdir, contourextList, ImgExtList, LabelExt, test_mode = False)
                 if flag == 0:
                     print(("Image: {s} does not have matfile".format(s = os.path.splitext(f)[0] )))
             else:
-                returnList.append({'thisfile':os.path.join(imgdir,f), 'thismatfile': None}) 
+                returnList.append({'thisfile':os.path.join(imgdir,f), 'thismatfile': None})
     return returnList
 
 def yieldfileinfo(imgdir, contourextList,ImgExtList,LabelExt):
@@ -464,7 +466,7 @@ def getfilelist(Imagefolder, inputext):
         inputext = [inputext]
     filelist = []
     filenames = []
-    allfiles = sorted(os.listdir(Imagefolder)) 
+    allfiles = sorted(os.listdir(Imagefolder))
     for f in allfiles:
         if os.path.splitext(f)[1] in inputext and os.path.isfile(os.path.join(Imagefolder,f)):
                filelist.append(os.path.join(Imagefolder,f))
@@ -588,7 +590,7 @@ def Indexflow(Totalnum, batch_size, random=True):
     totalIndx = np.arange(Totalnum).astype(np.int)
     if random is True:
         totalIndx = np.random.permutation(totalIndx)
-        
+
     chunkstart = 0
     for chunkidx in range(int(numberofchunk)):
         thisnum = min(batch_size, Totalnum - chunkidx*batch_size)
@@ -651,7 +653,7 @@ def _combine_markers(label_img, coordinates):
     #first we remove all the label_img region contain coordinates
     tmp_img = label_img.copy()
     num_obj = np.max(tmp_img)
-    
+
     for ind in range(1, num_obj+1):
         for j in range(coordinates.shape[0]):
             if tmp_img[coordinates[j,0], coordinates[j,1]] == ind:
@@ -672,7 +674,7 @@ def _combine_markers(label_img, coordinates):
 def combine_markers(label_img, coordinates):
     #first we remove all the label_img region contain coordinates
     num_obj = np.max(label_img)
-    
+
     regions = regionprops(label_img)
 
     seedmap = np.zeros_like(label_img, dtype=bool)
@@ -685,7 +687,7 @@ def combine_markers(label_img, coordinates):
         minr, minc, maxr, maxc = props.bbox
         thismask = label_img[minr:maxr, minc:maxc] == props.label
         this_seedmap  = seedmap[minr:maxr, minc:maxc]
-        this_seeds = np.argwhere(np.logical_and(thismask, this_seedmap)) + np.array([[minr, minc]]) 
+        this_seeds = np.argwhere(np.logical_and(thismask, this_seedmap)) + np.array([[minr, minc]])
 
         number_seeds = this_seeds.shape[0]
 
@@ -723,7 +725,7 @@ def residual_markers(label_img, coordinates):
     regionCount = 0
     classRegionCount = 0
     all_area = [props.area for props in regions]
-    mid_area = np.median(all_area)    
+    mid_area = np.median(all_area)
     for props in regions:
         minr, minc, maxr, maxc = props.bbox
         rlen = maxr-minr+1
@@ -734,15 +736,15 @@ def residual_markers(label_img, coordinates):
         this_seedmap  = seedmap[minr:maxr, minc:maxc]
         this_new_label  = new_label[minr:maxr, minc:maxc]
         this_class_label = class_label[minr:maxr, minc:maxc]
-        this_seeds = np.argwhere(np.logical_and(thismask, this_seedmap)) + np.array([[minr, minc]]) 
+        this_seeds = np.argwhere(np.logical_and(thismask, this_seedmap)) + np.array([[minr, minc]])
         number_seeds = this_seeds.shape[0]
 
         if number_seeds <= 1:
             classRegionCount += 1
             this_class_label[thismask] = classRegionCount
             #coordinates.difference(map(tuple, this_seeds.tolist()))
-        elif number_seeds >=2: 
-            # if the cell is very round, we don'r split it 
+        elif number_seeds >=2:
+            # if the cell is very round, we don'r split it
             if ratio > 0.85 and props.solidity>0.9 and props.area < 4*mid_area:
                 classRegionCount += 1
                 this_class_label[thismask] = classRegionCount
@@ -750,7 +752,7 @@ def residual_markers(label_img, coordinates):
                 regionCount += 1
                 this_new_label[thismask] = regionCount
                 #rem_cord = intersect(props.coords, coordinates)
-                new_coord[seedcount:seedcount+number_seeds,:] = this_seeds 
+                new_coord[seedcount:seedcount+number_seeds,:] = this_seeds
                 seedcount += number_seeds
 
     return class_label, new_label, new_coord[0:seedcount,:].astype(np.int)
@@ -829,11 +831,11 @@ def label2contour(label_img, org=None, print_color = [0,0,1], linewidth = 2, alp
     for id, props in enumerate(regions):
         minr, minc, maxr, maxc = props.bbox
         rs, re = max(minr-1,0), min(maxr+1, row)
-        cs, ce = max(minc-1,0), min(maxc+1, col) 
+        cs, ce = max(minc-1,0), min(maxc+1, col)
         thispatch = label_img[rs:re, cs:ce] == props.label
         contours  = measure.find_contours(thispatch, 0)
         thiscontour = (contours[0] + [rs, cs]).astype(int)
-        
+
         contourlist[id] = safe_boarder(thiscontour, row, col)
         contour_img[thiscontour[:, 0], thiscontour[:, 1]] = True
     masked_img = None
@@ -871,7 +873,7 @@ def split_img(img, windowsize=1000, board = 0, fixed_window = False, step_size =
                       we expand the left board to lefter to compensate the smaller reminging patches.
 
                       The default behavior is False: get all window_size patches, and collect the remining patches as it is.
-        
+
         step_size: if step_size is smaller than (windowsize-2*board), we extract the patches with overlapping.
                 which means the org_slice is overlapping.
 
@@ -1001,7 +1003,7 @@ def split_img(img, windowsize=1000, board = 0, fixed_window = False, step_size =
 
                 thisSize = (thisrowlen + 2*board + row_shift, thiscollen + 2*board + col_shift)
 
-                
+
                 org_slice = (slice(thisrowstart, thisrowend), slice(thiscolstart, thiscolend))
                 # slice on a cooridinate of the original image
                 extract_slice = (slice(board + row_shift, board + thisrowlen + row_shift),
@@ -1016,7 +1018,7 @@ def split_img(img, windowsize=1000, board = 0, fixed_window = False, step_size =
                 else:
                    IndexDict[thisSize] = []
                    IndexDict[thisSize].append(identifier)
-    
+
     PackDict = {}
     for this_size in list(IndexDict.keys()):
         iden_list = IndexDict[this_size]

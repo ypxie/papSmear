@@ -44,7 +44,7 @@ def _process_batch(inputs,size_spec=None, cfg=None):
 
     x_ratio, y_ratio = float(inp_size[1])/W, float(inp_size[0])/H
     bbox_pred_np, gt_boxes, gt_classes, dontcares, iou_pred_np = inputs
-    
+
     # net output
     hw, num_anchors, _ = bbox_pred_np.shape
 
@@ -91,11 +91,11 @@ def _process_batch(inputs,size_spec=None, cfg=None):
     cy = (gt_boxes_b[:, 1] + gt_boxes_b[:, 3]) * 0.5 / y_ratio
     cell_inds = np.floor(cy) * W + np.floor(cx)
     cell_inds = cell_inds.astype(np.int)
-    
+
     target_boxes = np.empty(gt_boxes_b.shape, dtype=np.float)
     target_boxes[:, 0] = cx - np.floor(cx)  # cx
     target_boxes[:, 1] = cy - np.floor(cy)  # cy
-    target_boxes[:, 2] = (gt_boxes_b[:, 2] - gt_boxes_b[:, 0]) # / inp_size[0] * out_size[0]  # tw 
+    target_boxes[:, 2] = (gt_boxes_b[:, 2] - gt_boxes_b[:, 0]) # / inp_size[0] * out_size[0]  # tw
     target_boxes[:, 3] = (gt_boxes_b[:, 3] - gt_boxes_b[:, 1]) # / inp_size[1] * out_size[1]  # th
 
     # for each gt boxes, match the best anchor
@@ -138,7 +138,7 @@ class Reorg(nn.Module):
         self.stride = stride
     def forward(self, x, small_size):
         stride = self.stride
-        
+
         x = match_tensor(x, (2*small_size[0], 2*small_size[1]))
 
         assert(x.data.dim() == 4)
@@ -204,20 +204,20 @@ class Darknet19(nn.Module):
 
     def forward(self, im_data, gt_boxes=None, gt_classes=None, dontcare=None):
         self.inp_size = im_data.size()[2::]
-        
+
         conv1s = self.conv1s(im_data)
         conv2 = self.conv2(conv1s)
         conv3 = self.conv3(conv2)
         conv1s_reorg = self.reorg(conv1s, conv3.size()[2::])
         cat_1_3 = torch.cat([conv1s_reorg, conv3], 1)
         conv4 = self.conv4(cat_1_3)
-        
+
         self.out_size = conv4.size()[2::]
         self.x_ratio = float(self.inp_size[1])/self.out_size[1]
         self.y_ratio = float(self.inp_size[0])/self.out_size[0]
 
         conv5 = self.conv5(conv4)   # batch_size, out_channels, h, w
-        #import pdb; pdb.set_trace() 
+        #import pdb; pdb.set_trace()
         # for detection
         # bsize, c, h, w -> bsize, h, w, c -> bsize, h x w, num_anchors, 5+num_classes
         bsize, _, h, w = conv5.size()
@@ -233,7 +233,7 @@ class Darknet19(nn.Module):
         score_pred = conv5_reshaped[:, :, :, 5:].contiguous()
         prob_pred = F.softmax(score_pred.view(-1, score_pred.size()[-1])).view_as(score_pred)
 
-        
+
         # for training
         if self.training:
             bbox_pred_np = bbox_pred.data.cpu().numpy()
@@ -255,7 +255,7 @@ class Darknet19(nn.Module):
             iou_mask   = to_device(_iou_mask, self.device_id, requires_grad=False)
             class_mask = to_device(_class_mask, self.device_id, requires_grad=False)
 
-            #import pdb; pdb.set_trace() 
+            #import pdb; pdb.set_trace()
 
             num_boxes = sum((len(boxes) for boxes in gt_boxes))
 
@@ -320,4 +320,3 @@ if __name__ == '__main__':
     net = Darknet19()
     # net.load_from_npz('models/yolo-voc.weights.npz')
     net.load_from_npz('models/darknet19.weights.npz', num_conv=18)
-

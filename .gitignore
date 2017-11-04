@@ -1,6 +1,10 @@
+# Files
 *.o
 *.so
 *.ipynb
+
+# Folders
+build/
 
 *.DS_Store
 *.pyc
