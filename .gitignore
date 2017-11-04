@@ -5,6 +5,11 @@
 
 # Folders
 build/
+__pycache__/
+.ipynb_checkpoints/
+Model/
+
+
 
 *.DS_Store
 *.pyc
