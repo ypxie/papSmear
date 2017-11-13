@@ -2,12 +2,13 @@
 *.o
 *.so
 *.ipynb
+*.pyx
+
+
 
 # Folders
 build/
 __pycache__/
-.ipynb_checkpoints/
-Model/
 
 
 
