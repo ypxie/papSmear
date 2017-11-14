@@ -6,9 +6,10 @@ import h5py
 from scipy.io import loadmat
 from multiprocessing import Pool
 
-from ..proj_utils.local_utils import *
-debug_mode = False
+from ..proj_utils.local_utils import getfileinfo, writeImg
 
+
+debug_mode = False
 
 # Load annotated bounding box mat file
 def load_mat(thismatfile, contourname_list=['Contours']):
@@ -69,6 +70,7 @@ def overlay_bbox(img, bbox, len=1):
     return img
 
 
+
 # Add change pixel value on bounding box
 def change_val(img,val, len, x_min, y_min, x_max, y_max):
     left_len  = (len-1)//2
@@ -96,7 +98,9 @@ def get_anchor(row_size, col_size, img_shape, boarder=0):
 
     upleft_row  = random.randint(br, row_size - dst_row - br)
     upleft_col  = random.randint(bc, col_size - dst_col - bc)
+
     return (upleft_row, upleft_col)
+
 
 # Crop bbox from large image
 def crop_bbox(bbox_list, r_min, c_min, r_max, c_max):
@@ -180,18 +184,18 @@ def _get_next(inputs):
 class papSmearData:
     def __init__(self, data_dir, batch_size=8, processes=8, img_shape=(256, 256),
                  resize_ratio=[0.3, 0.5, 0.6], testing=False):
-        self.__dict__.update(locals())
+        # load image and mat files
+        self.data_dir = data_dir
         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat')
+        self.img_num      = len(all_dict_list)
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
         self.mat_list_ = [this_dict['thismatfile'] for this_dict in all_dict_list]
-
         self.img_list  = self.img_list_ if debug_mode else [imread(img_path) for img_path in self.img_list_]
         self.mat_list  = self.mat_list_ if debug_mode else [load_mat(mat_path, contourname_list=['Contours']) for mat_path in self.mat_list_]
 
-        self.img_num      = len(all_dict_list)
+        self.batch_size = batch_size
         self.img_shape    = img_shape
         self._img_shape   = img_shape
-
         self.resize_ratio = resize_ratio
         self.testing = testing
         self.overlay_bbox = overlay_bbox
@@ -228,8 +232,6 @@ class papSmearData:
             bbox    = get_bbox(org_mat)
             overlayed_img = overlay_bbox(org_img, bbox).astype(np.uint8)
             writeImg(overlayed_img, os.path.join(save_path, img_name) )
-
-
 
 
     def next_batch(self):
@@ -300,70 +302,72 @@ class papSmearData:
 
 
 
-class testingData:
-    def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True):
-        self.__dict__.update(locals())
-        all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat', test_mode=True)
-        self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
-
-        self.img_list  = self.img_list_
-
-        self.img_num   = len(all_dict_list)
-
-        self.resize_ratio = resize_ratio
-        self.test_mode = test_mode
-        self.overlay_bbox = overlay_bbox
-        self._classes = ['fake class']
-        self._epoch = 0
-        self.count = 0
-
-        self._shuffle = True
-
-        self.indices = list(range(self.img_num))
-        self.start = 0
 
 
-    def next(self):
-        batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
-        img_path = self.img_list[self.count]
-        self.count += 1
-
-        org_img  = imread(img_path)
-        chosen_ratio = self.resize_ratio[0]
-        res_img = imresize(org_img, chosen_ratio)
-        res_img = res_img.transpose(2, 0, 1)
-        ret_img =  res_img * (2. / 255) - 1.
-
-        batch['images'] = ret_img[None]
-        batch['origin_im'].append(org_img.transpose(2, 0, 1))
-        batch['dontcare'].append(os.path.basename(img_path))
-        return batch
-
-
-
-    def close(self):
-        pass
-
-    @property
-    def num_classes(self):
-        return len(self._classes)
-
-    @property
-    def classes(self):
-        return self._classes
-
-    @property
-    def epoch(self):
-        return self._epoch
-
-    @property
-    def image_names(self):
-        return self.img_list
-
-    @property
-    def num_images(self):
-        return self.img_num
-
-    @property
-    def batch_per_epoch(self):
-        return (self.img_num + self.batch_size -1) // self.batch_size
+# class testingData:
+#     def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True):
+#         self.__dict__.update(locals())
+#         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat', test_mode=True)
+#         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
+#
+#         self.img_list  = self.img_list_
+#
+#         self.img_num   = len(all_dict_list)
+#
+#         self.resize_ratio = resize_ratio
+#         self.test_mode = test_mode
+#         self.overlay_bbox = overlay_bbox
+#         self._classes = ['fake class']
+#         self._epoch = 0
+#         self.count = 0
+#
+#         self._shuffle = True
+#
+#         self.indices = list(range(self.img_num))
+#         self.start = 0
+#
+#
+#     def next(self):
+#         batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
+#         img_path = self.img_list[self.count]
+#         self.count += 1
+#
+#         org_img  = imread(img_path)
+#         chosen_ratio = self.resize_ratio[0]
+#         res_img = imresize(org_img, chosen_ratio)
+#         res_img = res_img.transpose(2, 0, 1)
+#         ret_img =  res_img * (2. / 255) - 1.
+#
+#         batch['images'] = ret_img[None]
+#         batch['origin_im'].append(org_img.transpose(2, 0, 1))
+#         batch['dontcare'].append(os.path.basename(img_path))
+#         return batch
+#
+#
+#
+#     def close(self):
+#         pass
+#
+#     @property
+#     def num_classes(self):
+#         return len(self._classes)
+#
+#     @property
+#     def classes(self):
+#         return self._classes
+#
+#     @property
+#     def epoch(self):
+#         return self._epoch
+#
+#     @property
+#     def image_names(self):
+#         return self.img_list
+#
+#     @property
+#     def num_images(self):
+#         return self.img_num
+#
+#     @property
+#     def batch_per_epoch(self):
+#         return (self.img_num + self.batch_size -1) // self.batch_size

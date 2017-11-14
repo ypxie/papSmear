@@ -57,6 +57,7 @@ if  __name__ == '__main__':
     # Set data_root
     data_root = os.path.join(HOME_PATH, 'DataSet/PapSmear/CellBoundingBox/TrainDataset')
 
+
     # Dataloader setting
     dataloader = Dataset(data_root, args.batch_size, img_shape = (256, 256))  #img_size is changable
 
