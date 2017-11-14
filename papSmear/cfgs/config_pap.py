@@ -81,6 +81,7 @@ class config:
                                 [ 128.32483899 , 105.76417358]])
         num_anchors = len(anchors)
 
+
         # for training yolo2
         object_scale = 5.
         noobject_scale = 1.

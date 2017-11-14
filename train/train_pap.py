@@ -4,12 +4,23 @@ import os, sys, pdb
 import argparse
 import torch
 
+HOME_PATH = os.path.expanduser('~')
+FILE_PATH = os.path.abspath(__file__)
+PRJ_PATH = os.path.dirname(os.path.dirname(FILE_PATH))
+sys.path.append(PRJ_PATH)
 
-from .papSmear.proj_utils.local_utils import mkdirs
-from .papSmear.datasets.papsmear import papSmearData as Dataset
-from .papSmear.cfgs.config_pap import cfg
-from .papSmear.darknet import Darknet19
-from .papSmear.train_yolo import train_eng
+try:
+    from .papSmear.proj_utils.local_utils import mkdirs
+    from .papSmear.datasets.papsmear import papSmearData as Dataset
+    from .papSmear.cfgs.config_pap import cfg
+    from .papSmear.darknet import Darknet19
+    from .papSmear.train_yolo import train_eng
+except:
+    from papSmear.proj_utils.local_utils import mkdirs
+    from papSmear.datasets.papsmear import papSmearData as Dataset
+    from papSmear.cfgs.config_pap import cfg
+    from papSmear.darknet import Darknet19
+    from papSmear.train_yolo import train_eng
 
 
 def set_args():
@@ -38,19 +49,16 @@ def set_args():
     return args
 
 
-
 if  __name__ == '__main__':
     args = set_args()
 
     model_root = os.path.join(PRJ_PATH, 'Model')
     mkdirs([model_root])
-
     # Set data_root
-    HOME_PATH = os.path.expanduser('~')
     data_root = os.path.join(HOME_PATH, 'DataSet/PapSmear/CellBoundingBox/TrainDataset')
 
     # Dataloader setting
-    dataloader = Dataset(data_root, args.batch_size, resize_ratio = (256, 256))  #img_size is changable
+    dataloader = Dataset(data_root, args.batch_size, img_shape = (256, 256))  #img_size is changable
 
     # Set Darknet
     net = Darknet19(cfg)

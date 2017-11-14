@@ -98,7 +98,7 @@ def get_anchor(row_size, col_size, img_shape, boarder=0):
     upleft_col  = random.randint(bc, col_size - dst_col - bc)
     return (upleft_row, upleft_col)
 
-# Crop bbox from large image 
+# Crop bbox from large image
 def crop_bbox(bbox_list, r_min, c_min, r_max, c_max):
     numCell = len(bbox_list)
     new_bbox = []
@@ -134,8 +134,8 @@ def crop_bbox(bbox_list, r_min, c_min, r_max, c_max):
 def _get_next(inputs):
     img_data, mat_data, img_path, mat_path, resize_ratio, img_shape, testing = inputs
     try_count = 0
-    while True:
 
+    while True:
         org_img = imread(img_path) if debug_mode else img_data #
         org_mat = load_mat(mat_path, contourname_list=['Contours']) if debug_mode else mat_data #
         while True:
@@ -178,10 +178,9 @@ def _get_next(inputs):
 
 
 class papSmearData:
-    def __init__(self, data_dir, batch_size, img_shape=None, processes=16,
-                 testing= False, resize_ratio=[0.3, 0.5, 0.6]):
+    def __init__(self, data_dir, batch_size=8, processes=8, img_shape=(256, 256),
+                 resize_ratio=[0.3, 0.5, 0.6], testing=False):
         self.__dict__.update(locals())
-
         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat')
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
         self.mat_list_ = [this_dict['thismatfile'] for this_dict in all_dict_list]
@@ -304,13 +303,12 @@ class papSmearData:
 class testingData:
     def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True):
         self.__dict__.update(locals())
-
         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat', test_mode=True)
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
 
         self.img_list  = self.img_list_
 
-        self.img_num      = len(all_dict_list)
+        self.img_num   = len(all_dict_list)
 
         self.resize_ratio = resize_ratio
         self.test_mode = test_mode

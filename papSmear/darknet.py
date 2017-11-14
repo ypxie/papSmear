@@ -7,18 +7,11 @@ import torch.nn.functional as F
 from torch.multiprocessing import Pool
 from functools import partial
 
-try:
-    from .utils import network as net_utils
-    from .utils.cython_bbox import bbox_ious, anchor_intersections
-    from .utils.cython_yolo import yolo_to_bbox
-    from .proj_utils.model_utils import match_tensor
-    from .proj_utils.torch_utils import *
-except:
-    from utils import network as net_utils
-    from utils.cython_bbox import bbox_ious, anchor_intersections
-    from utils.cython_yolo import yolo_to_bbox
-    from proj_utils.model_utils import match_tensor
-    from proj_utils.torch_utils import *
+from .utils import network as net_utils
+from .utils.cython_bbox import bbox_ious, anchor_intersections
+from .utils.cython_yolo import yolo_to_bbox
+from .proj_utils.model_utils import match_tensor
+from .proj_utils.torch_utils import *
 
 
 def _make_layers(in_channels, net_cfg):
@@ -127,7 +120,6 @@ def _process_batch(inputs, size_spec=None, cfg=None):
         _classes[cell_ind, a, gt_classes[i]] = 1.
 
     return _boxes, _ious, _classes, _box_mask, _iou_mask, _class_mask
-
 
 
 class Reorg(nn.Module):
