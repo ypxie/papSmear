@@ -33,7 +33,7 @@ def set_args():
     parser.add_argument('--reuse_weights',   action='store_true', default=False, help='continue from last checkout point')
     parser.add_argument('--load_from_epoch', type=int, default= 800, help='load from epoch')
 
-    parser.add_argument('--display_freq',    type=int, default= 200, help='plot the results every {} batches')
+    parser.add_argument('--display_freq',    type=int, default= 10, help='plot the results every {} batches')
     parser.add_argument('--save_freq',       type=int, default= 20,  help='how frequent to save the model')
     parser.add_argument('--model_name',      type=str, default='yolo_pap')
 
@@ -43,16 +43,16 @@ def set_args():
 
 if  __name__ == '__main__':
     args = set_args()
-    model_root = os.path.join(PRJ_PATH, 'models')
-    data_root = os.path.join(PRJ_PATH, 'data/training')
+    DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    model_root = os.path.join(DatasetDir, 'models')
+    data_root = os.path.join(DatasetDir, 'data/training')
+    # data_root = os.path.join(DatasetDir, 'data/testing')
 
     # Dataloader setting
     dataloader = Dataset(data_root, args.batch_size, img_shape = (256, 256))
 
     # Set Darknet
     net = Darknet19(cfg)
-
-    pdb.set_trace()
 
     # CUDA Settings
     cuda_avail = torch.cuda.is_available()
@@ -61,5 +61,5 @@ if  __name__ == '__main__':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
 
-    print ('>> START training ')
+    # print ('>> START training ')
     train_eng(dataloader, model_root, args.model_name, net, args)

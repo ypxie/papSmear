@@ -51,23 +51,23 @@ class plot_scalar(object):
         if self.handler is None:
             self.handler = Visdom(port=port)
         self.count = 0
-        
+
     def plot(self,values, step = None):
         org_type_chk = type(values) is  list
         if not org_type_chk:
             values = [values]
-            
-        len_val = len(values)        
+
+        len_val = len(values)
         if step is None:
             step = list(range(self.count, self.count+len_val))
 
         self.count += len_val
         self.steps.extend(step)
         self.values.extend(values)
-        
+
         if self.count % self.rate == 0 or org_type_chk:
             self.flush()
-        
+
     def reset(self):
         self.steps = []
         self.values = []
@@ -77,19 +77,20 @@ class plot_scalar(object):
         assert type(self.values) is list, 'values have to be list'
         if type(self.values[0]) is not list:
             self.values = [self.values]
-             
+
         n_lines = len(self.values)
         repeat_steps = [self.steps]*n_lines
         steps  = np.array(repeat_steps).transpose()
         values = np.array(self.values).transpose()
-        
+
         assert not np.isnan(values).any(), 'nan error in loss!!!'
+        print(steps, values, values.shape, steps.shape)
         res = self.handler.line(
                 X = steps,
                 Y=  values,
                 win= self.name,
                 update='append',
-                opts=dict(title = self.name, legend=None),
+                opts=dict(title = self.name),
                 env = self.env
             )
 
@@ -99,7 +100,7 @@ class plot_scalar(object):
                 Y=values,
                 win=self.name,
                 env=self.env,
-                opts=dict(title=self.name, legend=None)
+                opts=dict(title=self.name)
             )
 
         self.reset()
@@ -143,7 +144,7 @@ def display_timeseries(strumodel, BatchData, BatchLabel, plot=None, name='defaul
     for idx in range(data_len):
         rs, cs = 0, idx*(H+intv)
         batch_content[rs:rs+W,  cs:cs+H]   = inputdata[0,idx,0]
-       
+
     for idx in range(pred_len):
         rs, cs = 0, idx*(H+intv)
         predict_content[rs:rs+W,  cs:cs+H] = prediction[0,idx,0]
@@ -167,7 +168,7 @@ def display_timeseries(strumodel, BatchData, BatchLabel, plot=None, name='defaul
 
 def save_images(X, save_path=None, save=True, dim_ordering='tf'):
     # X: B*C*H*W or list of X
-    if type(X) is list: 
+    if type(X) is list:
         return save_images_list(X, save_path, save, dim_ordering)
     else:
         n_samples = X.shape[0]
@@ -179,7 +180,7 @@ def save_images(X, save_path=None, save=True, dim_ordering='tf'):
             # BCHW -> BHWC
             if dim_ordering == 'tf':
                 pass
-            else:           
+            else:
                 X = X.transpose(0,2,3,1)
             h, w, c = X[0].shape[:3]
             hgap, wgap = int(0.1*h), int(0.1*w)
@@ -189,7 +190,7 @@ def save_images(X, save_path=None, save=True, dim_ordering='tf'):
             hgap, wgap = int(0.1*h), int(0.1*w)
             img = np.zeros(((h+hgap)*nh - hgap, (w+wgap)*nw - wgap))
         else:
-            assert 0, 'you have wrong number of dimension input {}'.format(X.ndim) 
+            assert 0, 'you have wrong number of dimension input {}'.format(X.ndim)
         for n, x in enumerate(X):
             i = n%nw
             j = n // nw
@@ -202,7 +203,7 @@ def save_images(X, save_path=None, save=True, dim_ordering='tf'):
         return img
 
 def save_images_list(X_list, save_path=None, save=True, dim_ordering='tf'):
-    
+
     # X_list: list of X
     # X: B*C*H*W
 
@@ -210,16 +211,16 @@ def save_images_list(X_list, save_path=None, save=True, dim_ordering='tf'):
     n_samples = X.shape[0]
     nh = n_samples
     nw = len(X_list)
-    
+
 
     if X.ndim == 4:
         # BCHW -> BHWC
         if dim_ordering == 'tf':
             pass
-        else:  
-            for idx, X in enumerate(X_list) :       
+        else:
+            for idx, X in enumerate(X_list) :
                 X_list[idx] = X.transpose(0,2,3,1)
-        
+
         X = X_list[0]
         h, w, c = X[0].shape[:3]
         hgap, wgap = int(0.1*h), int(0.1*w)
@@ -230,10 +231,10 @@ def save_images_list(X_list, save_path=None, save=True, dim_ordering='tf'):
         hgap, wgap = int(0.1*h), int(0.1*w)
         img = np.zeros(((h+hgap)*nh - hgap, (w+wgap)*nw - wgap))
     else:
-        assert 0, 'you have wrong number of dimension input {}'.format(X.ndim) 
-    
+        assert 0, 'you have wrong number of dimension input {}'.format(X.ndim)
+
     for n, x_tuple in enumerate(zip(*X_list)):
-        
+
         i = n
         for j, x in enumerate(x_tuple):
             rs, cs = i*(h+hgap), j*(w+wgap)
@@ -242,6 +243,6 @@ def save_images_list(X_list, save_path=None, save=True, dim_ordering='tf'):
     if c == 1:
         img = img[:,:,0]
     if save:
-        save_image = (img.copy() + 1) /2 * 255 
+        save_image = (img.copy() + 1) /2 * 255
         writeImg(save_image.astype(np.uint8), save_path)
     return img

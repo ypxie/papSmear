@@ -65,6 +65,7 @@ def _process_batch(inputs, size_spec=None, cfg=None):
         anchors,
         H, W,
         x_ratio, y_ratio)
+    # for each prediction, calculate in 8*8 with all corresponsding anchors.
     bbox_np = bbox_np[0]  # bbox_np = (hw, num_anchors, (x1, y1, x2, y2))   range: 0 ~ 1
 
     # gt_boxes_b = np.asarray(gt_boxes[b], dtype=np.float)
@@ -76,23 +77,26 @@ def _process_batch(inputs, size_spec=None, cfg=None):
         np.ascontiguousarray(bbox_np_b,  dtype=np.float),
         np.ascontiguousarray(gt_boxes_b, dtype=np.float)
     )
+    # for each assumed box, find the best-matched with ground-truth
     best_ious = np.max(ious, axis=1).reshape(_iou_mask.shape)
+
     iou_penalty = 0 - iou_pred_np[best_ious < cfg.iou_thresh]
     _iou_mask[best_ious <= cfg.iou_thresh] = cfg.noobject_scale * iou_penalty
 
-    # locate the cell of each gt_boxe
+    # locate the cell of each gt_boxes_b
     cx = (gt_boxes_b[:, 0] + gt_boxes_b[:, 2]) * 0.5 / x_ratio
     cy = (gt_boxes_b[:, 1] + gt_boxes_b[:, 3]) * 0.5 / y_ratio
     cell_inds = np.floor(cy) * W + np.floor(cx)
     cell_inds = cell_inds.astype(np.int)
 
+    # transfer ground-truth box to 8*8 format
     target_boxes = np.empty(gt_boxes_b.shape, dtype=np.float)
     target_boxes[:, 0] = cx - np.floor(cx)  # cx
     target_boxes[:, 1] = cy - np.floor(cy)  # cy
     target_boxes[:, 2] = (gt_boxes_b[:, 2] - gt_boxes_b[:, 0]) # / inp_size[0] * out_size[0]  # tw
     target_boxes[:, 3] = (gt_boxes_b[:, 3] - gt_boxes_b[:, 1]) # / inp_size[1] * out_size[1]  # th
 
-    # for each gt boxes, match the best anchor
+    # for each gt boxes, match the best anchor and save the index
     gt_boxes_resize = np.copy(gt_boxes_b) # I don't need to resize
     anchor_ious = anchor_intersections(
         anchors,
@@ -188,7 +192,7 @@ class Darknet19(nn.Module):
         self.bbox_loss = None
         self.iou_loss = None
         self.cls_loss = None
-        self.pool = Pool(processes=16)
+        self.pool = Pool(processes=8)
 
 
     @property
@@ -226,14 +230,13 @@ class Darknet19(nn.Module):
         score_pred = conv5_reshaped[:, :, :, 5:].contiguous()
         prob_pred = F.softmax(score_pred.view(-1, score_pred.size()[-1])).view_as(score_pred)
 
-
         # for training
         if self.training:
             bbox_pred_np = bbox_pred.data.cpu().numpy()
             iou_pred_np = iou_pred.data.cpu().numpy()
+
             _boxes, _ious, _classes, _box_mask, _iou_mask, _class_mask = self._build_target(
                 bbox_pred_np, gt_boxes, gt_classes, dontcare, iou_pred_np)
-
 
             _boxes     = to_device(_boxes, self.device_id, requires_grad=False)
             _ious      = to_device(_ious, self.device_id , requires_grad=False)
@@ -257,7 +260,7 @@ class Darknet19(nn.Module):
 
     def _build_target(self, bbox_pred_np, gt_boxes, gt_classes, dontcare, iou_pred_np):
         """
-        :param bbox_pred: shape: (bsize, h x w, num_anchors, 4) : (sig(tx), sig(ty), exp(tw), exp(th))
+        :param bbox_pred_np: shape: (bsize, h x w, num_anchors, 4) : (sig(tx), sig(ty), exp(tw), exp(th))
         """
         bsize = bbox_pred_np.shape[0]
         #print('bbox pred: ',bbox_pred_np.shape)
@@ -296,9 +299,3 @@ class Darknet19(nn.Module):
                 if ptype == 'kernel':
                     param = param.permute(3, 2, 0, 1)
                 own_dict[key].copy_(param)
-
-
-# if __name__ == '__main__':
-#     net = Darknet19()
-#     # net.load_from_npz('models/yolo-voc.weights.npz')
-#     net.load_from_npz('models/darknet19.weights.npz', num_conv=18)

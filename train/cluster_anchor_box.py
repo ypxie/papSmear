@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
+
 import os, sys, pdb
 import numpy as np
 from sklearn.cluster import KMeans
-from sklearn.cluster import spectral_clustering
 
 FILE_PATH = os.path.abspath(__file__)
 PRJ_PATH = os.path.dirname(os.path.dirname(FILE_PATH))
 sys.path.append(PRJ_PATH)
-from papSmear.darknet import Darknet19
 from papSmear.datasets.papsmear import papSmearData as Dataset
 
 if __name__ == '__main__':
     # Load dataset
-    data_root = os.path.join(os.path.expanduser('~'),
-                             'DataSet/PapSmear/CellBoundingBox/TrainDataset')
+    data_root = "../data/training/"
     resize_ratio = [0.3, 0.5, 0.6]
     dataloader = Dataset(data_dir=data_root, resize_ratio=resize_ratio)
 
