@@ -1,6 +1,7 @@
 *.DS_Store
 *.pyc
 *py~
+*.bak
 *.pth
 Data/*
 Model/*
@@ -15,11 +16,10 @@ temp/*
 # developer environments
 .idea
 .ipython*
-*/.ipynb*
-*/.ipynb_checkpoints/*
+.ipynb*
+.ipynb_checkpoints/*
 Models/
 inception-score/inception_finetuned_models/*
 inception-score/results/*
 demo/text_encoder/*
 .remote-sync.json
-test.py

@@ -10,7 +10,6 @@ from . import utils.network as net_utils
 from .utils.timer import Timer
 from . import cfgs.config as cfg
 
-
 def preprocess(fname):
     # return fname
     image = cv2.imread(fname)
