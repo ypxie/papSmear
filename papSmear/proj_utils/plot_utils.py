@@ -84,7 +84,6 @@ class plot_scalar(object):
         values = np.array(self.values).transpose()
 
         assert not np.isnan(values).any(), 'nan error in loss!!!'
-        print(steps, values, values.shape, steps.shape)
         res = self.handler.line(
                 X = steps,
                 Y=  values,

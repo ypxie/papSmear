@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os, sys, pdb
 import numpy as np
 
@@ -11,7 +13,7 @@ from .utils import network as net_utils
 from .utils.cython_bbox import bbox_ious, anchor_intersections
 from .utils.cython_yolo import yolo_to_bbox
 from .proj_utils.model_utils import match_tensor
-from .proj_utils.torch_utils import *
+from .proj_utils.torch_utils import to_device
 
 
 def _make_layers(in_channels, net_cfg):

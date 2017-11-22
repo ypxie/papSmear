@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os, sys, pdb
 import cv2
 import torch
@@ -6,9 +8,8 @@ import datetime
 from torch.multiprocessing import Pool
 
 from .proj_utils.plot_utils import plot_scalar
-from .proj_utils.torch_utils import *
+from .proj_utils.torch_utils import to_device
 from .proj_utils.local_utils import mkdirs
-
 
 
 def train_eng(dataloader, model_root, model_name, net, args):
@@ -40,7 +41,7 @@ def train_eng(dataloader, model_root, model_name, net, args):
     batch_per_epoch = dataloader.batch_per_epoch
     bbox_loss, iou_loss, cls_loss = 0., 0., 0.
     train_loss = 0.0
-    cnt, step_cnt = 0, 0
+    cnt = 0
     epoc_num = start_epoch
 
     print("Start training...")
@@ -70,23 +71,20 @@ def train_eng(dataloader, model_root, model_name, net, args):
         iou_loss   += iou_loss_val
         cls_loss   += cls_loss_val
         train_loss += train_loss_val
-        print("Current step:  {}, loss {}".format(step, loss.data.cpu().numpy().mean()))
         loss_train_plot.plot(loss.data.cpu().numpy().mean())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         cnt += 1
-        step_cnt += 1
-
 
         if step > 0 and step % args.display_freq == 0:
             train_loss /= cnt
             bbox_loss /= cnt
             iou_loss /= cnt
             cls_loss /= cnt
-            print(('epoch {}[{}/{}], loss: {}, bbox_loss: {}, iou_loss: {}, cls_loss:{}'. \
-                    format(epoc_num, step_cnt, batch_per_epoch, train_loss, bbox_loss, iou_loss, cls_loss)))
+            print(('epoch {:>5}, total loss: {:.6f}, bbox_loss: {:.6f}, iou_loss: {:.6f}, cls_loss:{:.2f}'. \
+                    format(epoc_num, train_loss, bbox_loss, iou_loss, cls_loss)))
             train_loss, bbox_loss, iou_loss, cls_loss = 0, 0., 0., 0.
             cnt = 0
 
@@ -94,11 +92,11 @@ def train_eng(dataloader, model_root, model_name, net, args):
             if epoc_num in args.lr_decay_epochs: # adjust learing rate
                 lr *= args.lr_decay
                 optimizer = set_lr(optimizer, lr)
-            step_cnt = 0
-
             epoc_num = start_epoch + dataloader.epoch - 1
             if dataloader.epoch > 0 and dataloader.epoch % args.save_freq == 0:
-                torch.save(net.state_dict(), os.path.join(model_folder, 'weights_epoch{}.pth'.format(epoc_num)))
-                print('save weights at {}'.format(model_folder))
+                weights_name = "weights_epoch-" + str(epoc_num).zfill(5)
+                model_path = os.path.join(model_folder, weights_name)
+                torch.save(net.state_dict(), model_path)
+                print('save weights at {}'.format(model_path))
 
     dataloader.close()

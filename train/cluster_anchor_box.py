@@ -11,7 +11,7 @@ from papSmear.datasets.papsmear import papSmearData as Dataset
 
 if __name__ == '__main__':
     # Load dataset
-    data_root = "../data/training/"
+    data_root = "/data/.data1/pingjun/Datasets/PapSmear/data/training/"
     resize_ratio = [0.3, 0.5, 0.6]
     dataloader = Dataset(data_dir=data_root, resize_ratio=resize_ratio)
 

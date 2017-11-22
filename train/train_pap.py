@@ -8,6 +8,7 @@ FILE_PATH = os.path.abspath(__file__)
 PRJ_PATH = os.path.dirname(os.path.dirname(FILE_PATH))
 sys.path.append(PRJ_PATH)
 
+
 from papSmear.proj_utils.local_utils import mkdirs
 from papSmear.datasets.papsmear import papSmearData as Dataset
 from papSmear.cfgs.config_pap import cfg
@@ -19,7 +20,7 @@ def set_args():
     # Arguments setting
     parser = argparse.ArgumentParser(description = 'Pap Smear Bounding Box Detection')
 
-    parser.add_argument('--device_id',  type=int, default=0, help='which device')
+    parser.add_argument('--device_id',  type=int, default=5, help='which device')
     parser.add_argument('--batch_size', type=int, default=8, help='batch size.')
     parser.add_argument('--img_size',   default=[256, 320, 352], help='output image size')
 
@@ -33,8 +34,8 @@ def set_args():
     parser.add_argument('--reuse_weights',   action='store_true', default=False, help='continue from last checkout point')
     parser.add_argument('--load_from_epoch', type=int, default= 800, help='load from epoch')
 
-    parser.add_argument('--display_freq',    type=int, default= 10, help='plot the results every {} batches')
-    parser.add_argument('--save_freq',       type=int, default= 20,  help='how frequent to save the model')
+    parser.add_argument('--display_freq',    type=int, default= 50, help='plot the results every {} batches')
+    parser.add_argument('--save_freq',       type=int, default= 500,  help='how frequent to save the model')
     parser.add_argument('--model_name',      type=str, default='yolo_pap')
 
     args = parser.parse_args()
@@ -46,11 +47,10 @@ if  __name__ == '__main__':
     DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
     model_root = os.path.join(DatasetDir, 'models')
     data_root = os.path.join(DatasetDir, 'data/training')
-    # data_root = os.path.join(DatasetDir, 'data/testing')
+    # data_root = os.path.join(DatasetDir, 'data/testing'
 
     # Dataloader setting
     dataloader = Dataset(data_root, args.batch_size, img_shape = (256, 256))
-
     # Set Darknet
     net = Darknet19(cfg)
 
@@ -60,6 +60,6 @@ if  __name__ == '__main__':
         net.cuda(args.device_id)
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
-
+        
     # print ('>> START training ')
     train_eng(dataloader, model_root, args.model_name, net, args)
