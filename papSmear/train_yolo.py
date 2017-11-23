@@ -94,7 +94,7 @@ def train_eng(dataloader, model_root, model_name, net, args):
                 optimizer = set_lr(optimizer, lr)
             epoc_num = start_epoch + dataloader.epoch - 1
             if dataloader.epoch > 0 and dataloader.epoch % args.save_freq == 0:
-                weights_name = "weights_epoch-" + str(epoc_num).zfill(5)
+                weights_name = "weights_epoch-" + str(epoc_num).zfill(5) + '.pth'
                 model_path = os.path.join(model_folder, weights_name)
                 torch.save(net.state_dict(), model_path)
                 print('save weights at {}'.format(model_path))

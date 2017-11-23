@@ -8,13 +8,11 @@ FILE_PATH = os.path.abspath(__file__)
 PRJ_PATH = os.path.dirname(os.path.dirname(FILE_PATH))
 sys.path.append(PRJ_PATH)
 
-
 from papSmear.proj_utils.local_utils import mkdirs
 from papSmear.datasets.papsmear import papSmearData as Dataset
 from papSmear.cfgs.config_pap import cfg
 from papSmear.darknet import Darknet19
 from papSmear.train_yolo import train_eng
-
 
 def set_args():
     # Arguments setting
@@ -47,7 +45,6 @@ if  __name__ == '__main__':
     DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
     model_root = os.path.join(DatasetDir, 'models')
     data_root = os.path.join(DatasetDir, 'data/training')
-    # data_root = os.path.join(DatasetDir, 'data/testing'
 
     # Dataloader setting
     dataloader = Dataset(data_root, args.batch_size, img_shape = (256, 256))
@@ -60,6 +57,6 @@ if  __name__ == '__main__':
         net.cuda(args.device_id)
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
-        
+
     # print ('>> START training ')
     train_eng(dataloader, model_root, args.model_name, net, args)

@@ -10,12 +10,14 @@
 data/
 models
 build/
+docs/
 __pycache__/
 
 
 *.DS_Store
 *.pyc
 *py~
+*.bak
 *.pth
 *.swp
 .vscode
@@ -29,7 +31,6 @@ temp/*
 # developer environments
 .idea
 .ipython*
-*/.ipynb*
-*/.ipynb_checkpoints/*
+*.ipynb*
+*.ipynb_checkpoints/*
 .remote-sync.json
-test.py

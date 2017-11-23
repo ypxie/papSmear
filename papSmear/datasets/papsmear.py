@@ -212,7 +212,12 @@ class papSmearData:
     def get_all_bbox(self):
         bbox_all = []
         for idx in range(self.img_num):
-            org_mat = self.mat_list[idx]
+            # org_mat = self.mat_list[idx]
+            if debug_mode:
+                org_mat = load_mat(self.mat_list_[idx], contourname_list=['Contours'])
+            else:
+                org_mat = self.mat_list[idx]
+
             for chosen_ratio in self.resize_ratio:
                 res_mat = resize_mat(org_mat, chosen_ratio)
                 bbox = get_bbox(res_mat)
@@ -293,67 +298,70 @@ class papSmearData:
     def batch_per_epoch(self):
         return (self.img_num + self.batch_size -1) // self.batch_size
 
-# class testingData:
-#     def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True):
-#         self.__dict__.update(locals())
-#
-#         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat', test_mode=True)
-#         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
-#
-#         self.img_list  = self.img_list_
-#
-#         self.img_num      = len(all_dict_list)
-#
-#         self.resize_ratio = resize_ratio
-#         self.test_mode = test_mode
-#         self.overlay_bbox = overlay_bbox
-#         self._classes = ['fake class']
-#         self._epoch = 0
-#         self.count = 0
-#
-#         self._shuffle = True
-#
-#         self.indices = list(range(self.img_num))
-#         self.start = 0
-#
-#     def next(self):
-#         batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
-#         img_path = self.img_list[self.count]
-#         self.count += 1
-#
-#         org_img  = imread(img_path)
-#         chosen_ratio = self.resize_ratio[0]
-#         res_img = imresize(org_img, chosen_ratio)
-#         res_img = res_img.transpose(2, 0, 1)
-#         ret_img =  res_img * (2. / 255) - 1.
-#
-#         batch['images'] = ret_img[None]
-#         batch['origin_im'].append(org_img.transpose(2, 0, 1))
-#         batch['dontcare'].append(os.path.basename(img_path))
-#         return batch
-#
-#     def close(self):
-#         pass
-#
-#     @property
-#     def num_classes(self):
-#         return len(self._classes)
-#
-#     @property
-#     def classes(self):
-#         return self._classes
-#     @property
-#     def epoch(self):
-#         return self._epoch
-#
-#     @property
-#     def image_names(self):
-#         return self.img_list
-#
-#     @property
-#     def num_images(self):
-#         return self.img_num
-#
-#     @property
-#     def batch_per_epoch(self):
-#         return (self.img_num + self.batch_size -1) // self.batch_size
+
+
+class testingData:
+    def __init__(self, data_dir, batch_size, resize_ratio=[0.6], test_mode=True):
+        self.__dict__.update(locals())
+
+        all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat', test_mode=True)
+        self.img_list_ = [this_dict['thisfile'] for this_dict in all_dict_list]
+        self.img_list  = self.img_list_
+        self.img_num  = len(all_dict_list)
+
+        self.resize_ratio = resize_ratio
+        self.test_mode = test_mode
+        self.overlay_bbox = overlay_bbox
+        self._classes = ['fake class']
+        self._shuffle = False
+        self.indices = list(range(self.img_num))
+
+        self._epoch = 0
+        self.count = 0
+        self.start = 0
+
+
+    def next(self):
+        batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
+        img_path = self.img_list[self.count]
+        self.count += 1
+
+        org_img  = imread(img_path)
+        chosen_ratio = self.resize_ratio[0]
+        res_img = imresize(org_img, chosen_ratio)
+        res_img = res_img.transpose(2, 0, 1)
+        ret_img =  res_img * (2. / 255) - 1.
+
+        # batch['images'] = ret_img[None]
+        batch['images'] = np.expand_dims(ret_img, 0)
+        batch['origin_im'].append(org_img.transpose(2, 0, 1))
+        batch['dontcare'].append(os.path.basename(img_path))
+
+        return batch
+
+    def close(self):
+        pass
+
+    @property
+    def num_classes(self):
+        return len(self._classes)
+
+    @property
+    def classes(self):
+        return self._classes
+
+    @property
+    def epoch(self):
+        return self._epoch
+
+    @property
+    def image_names(self):
+        return self.img_list_
+
+    @property
+    def num_images(self):
+        return self.img_num
+
+    @property
+    def batch_per_epoch(self):
+        return (self.img_num + self.batch_size -1) // self.batch_size
