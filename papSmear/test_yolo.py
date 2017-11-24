@@ -113,8 +113,8 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
     train_loss = 0
     bbox_loss, iou_loss, cls_loss = 0., 0., 0.
     num_images = dataloader.num_images # cause testing has to be of batch size 1
-    all_boxes = [[[] for _ in range(num_images)]
-                 for _ in range(1)]
+    # all_boxes = [[[] for _ in range(num_images)]
+    #              for _ in range(1)]
     print('num_images: ', num_images)
 
     _t = {'im_detect': Timer(), 'misc': Timer()}
@@ -137,10 +137,10 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
         print('{}/{} detection time {:.4f}, post_processing time {:.4f}'.format(i+1, num_images, detect_time, utils_time))
         ori_im = ori_im.transpose(1,2,0)
 
-        bboxes = bboxes / args.resize_ratio
+        bboxes = bboxes / args.resize_ratio[0]
         overlaid_img = dataloader.overlay_bbox(ori_im, bboxes, len=6).astype(np.uint8)
         writeImg(overlaid_img, os.path.join(save_folder, img_name))
 
-    bbox_file = os.path.join(save_folder, 'bbox_file.pkl')
-    with open(bbox_file, 'wb') as f:
-        pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
+    # bbox_file = os.path.join(save_folder, 'bbox_file.pkl')
+    # with open(bbox_file, 'wb') as f:
+    #     pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)

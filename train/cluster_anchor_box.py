@@ -21,6 +21,8 @@ if __name__ == '__main__':
     row_size_list = all_bbox[:,3] - all_bbox[:,1]
     dim_array = np.stack([col_size_list,row_size_list], axis=1)
 
+    pdb.set_trace()
+    
     # Clustered centered image dims
     kmeans = KMeans(n_clusters=9, random_state=0).fit(dim_array)
     centers = kmeans.cluster_centers_

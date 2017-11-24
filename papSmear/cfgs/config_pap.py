@@ -26,12 +26,12 @@ class config:
         rand_seed = 1024
         use_tensorboard = True
 
+        # base = int(np.ceil(pow(num_classes, 1. / 3)))         # for display
+        # colors = [_to_color(x, base) for x in range(num_classes)]
+
         # pap_smear infor
         label_names = ['fake class']
         num_classes = len(label_names)
-
-        # base = int(np.ceil(pow(num_classes, 1. / 3)))         # for display
-        # colors = [_to_color(x, base) for x in range(num_classes)]
 
         anchors = np.asarray( [[  93.2755673,    76.6358055 ],
                                 [ 171.9592885,   131.77937709],
@@ -44,11 +44,14 @@ class config:
                                 [ 175.22840536,  196.91588804]])
         num_anchors = len(anchors)
 
+        iou_thresh = 0.6
+
         object_scale = 5.
         noobject_scale = 1.
-        class_scale = 1.
+
+
         coord_scale = 1.
-        iou_thresh = 0.6
+        class_scale = 1.
 
         self.__dict__.update(locals())
 

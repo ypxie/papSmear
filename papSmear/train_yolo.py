@@ -8,7 +8,7 @@ import datetime
 from torch.multiprocessing import Pool
 
 from .proj_utils.plot_utils import plot_scalar
-from .proj_utils.torch_utils import to_device
+from .proj_utils.torch_utils import to_device, set_lr
 from .proj_utils.local_utils import mkdirs
 
 

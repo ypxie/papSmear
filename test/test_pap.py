@@ -19,8 +19,8 @@ def set_args():
     parser.add_argument('--batch-size',      type=int, default=1)
     parser.add_argument('--device-id',       type=int, default=1)
     parser.add_argument('--resize-ratio',    type=list, default=[0.6])
-    parser.add_argument('--load_from_epoch', type=str, default="03500")
-    parser.add_argument('--model_name',      type=str, default='yolo_pap')
+    parser.add_argument('--load_from_epoch', type=str, default="06000")
+    parser.add_argument('--model_name',      type=str, default='yolo_pap_best')
     args = parser.parse_args()
 
     return args

@@ -8,8 +8,8 @@ from multiprocessing import Pool
 from numba import jit
 from ..proj_utils.local_utils import getfileinfo, writeImg, imread, imresize
 
-debug_mode = True
 
+debug_mode = True
 # Load annotated bounding box mat file
 def load_mat(thismatfile, contourname_list=['Contours']):
     # First try load using h5py; then try using scipy.io.loadmat
@@ -30,6 +30,7 @@ def load_mat(thismatfile, contourname_list=['Contours']):
                     contour_mat = cnts[0]
                 break
     return contour_mat
+
 
 # Resize bounding box to a certain ratio
 def resize_mat(contour_mat, resize_ratio):
@@ -52,7 +53,7 @@ def get_bbox(contour_mat):
 
         x_min, x_max = np.min(xcontour), np.max(xcontour)
         y_min, y_max = np.min(ycontour), np.max(ycontour)
-        bbox_list.append([x_min, y_min, x_max, y_max] )
+        bbox_list.append([x_min, y_min, x_max, y_max])
     return bbox_list
 
 
@@ -68,7 +69,7 @@ def overlay_bbox(img, bbox,len=1):
 
 
 
-@jit(nopython=True)
+@jit
 def change_val(img,val, len, x_min, y_min, x_max, y_max):
     left_len  = (len-1)//2
     right_len = (len-1) - left_len
@@ -139,12 +140,12 @@ def _get_next(inputs):
     org_mat = load_mat(mat_path, contourname_list=['Contours']) if debug_mode else mat_data #
 
     try_box = 0
-    while try_box <= 10:
+    while try_box <= 5:
         try_count = 0
         while True:
             chosen_ratio = resize_ratio[np.random.randint(0, len(resize_ratio)-1)]
 
-            if try_count >= 10:
+            if try_count >= 6:
                 chosen_ratio = 1.1 * max( float(dst_row)/float(row_size), float(dst_col)/float(col_size) )
 
             res_img = imresize(org_img, chosen_ratio)
@@ -199,7 +200,8 @@ class papSmearData:
         self.overlay_bbox = overlay_bbox
         self._classes = ['fake class']
         self._epoch = 0
-        self.count = 0
+        # self.count = 0
+        self.start = 0
         self.batch_count = 0
 
         self._pool_processes = processes
@@ -207,7 +209,7 @@ class papSmearData:
         self._shuffle = True
 
         self.indices = list(range(self.img_num))
-        self.start = 0
+
 
     def get_all_bbox(self):
         bbox_all = []
