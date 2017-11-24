@@ -4,8 +4,6 @@
 *.ipynb
 *.pyx
 
-
-
 # Folders
 data/
 models
