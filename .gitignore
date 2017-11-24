@@ -1,25 +1,34 @@
+# Files
+*.o
+*.so
+*.ipynb
+*.pyx
+
+# Folders
+data/
+models
+build/
+docs/
+__pycache__/
+
+
 *.DS_Store
 *.pyc
 *py~
 *.bak
 *.pth
-Data/*
-Model/*
-models/*
 *.swp
 .vscode
 *~
 temp/*
+
 # test-related
 .coverage
 .cache
+
 # developer environments
 .idea
 .ipython*
-.ipynb*
-.ipynb_checkpoints/*
-Models/
-inception-score/inception_finetuned_models/*
-inception-score/results/*
-demo/text_encoder/*
+*.ipynb*
+*.ipynb_checkpoints/*
 .remote-sync.json
