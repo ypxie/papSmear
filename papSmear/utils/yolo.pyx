@@ -12,12 +12,12 @@ cdef extern from "math.h":
 
 def yolo_to_bbox(
         np.ndarray[DTYPE_t, ndim=4] bbox_pred,
-        np.ndarray[DTYPE_t, ndim=2] anchors, int H, int W):
-    return yolo_to_bbox_c(bbox_pred, anchors, H, W)
+        np.ndarray[DTYPE_t, ndim=2] anchors,int H, int W, DTYPE_t x_ratio, DTYPE_t y_ratio):
+    return yolo_to_bbox_c(bbox_pred, anchors,H, W, x_ratio, y_ratio)
 
 cdef yolo_to_bbox_c(
         np.ndarray[DTYPE_t, ndim=4] bbox_pred,
-        np.ndarray[DTYPE_t, ndim=2] anchors, int H, int W):
+        np.ndarray[DTYPE_t, ndim=2] anchors,int H, int W, DTYPE_t x_ratio, DTYPE_t y_ratio):
     """
     Parameters
     ----------
@@ -33,15 +33,17 @@ cdef yolo_to_bbox_c(
 
     cdef DTYPE_t cx, cy, bw, bh
     cdef unsigned int row, col, a, ind
+
     for b in range(bsize):
         for row in range(H):
             for col in range(W):
                 ind = row * W + col
                 for a in range(num_anchors):
-                    cx = (bbox_pred[b, ind, a, 0] + col) / W
-                    cy = (bbox_pred[b, ind, a, 1] + row) / H
-                    bw = bbox_pred[b, ind, a, 2] * anchors[a][0] / W * 0.5
-                    bh = bbox_pred[b, ind, a, 3] * anchors[a][1] / H * 0.5
+                    cx = (bbox_pred[b, ind, a, 0] + col) * x_ratio
+                    cy = (bbox_pred[b, ind, a, 1] + row) * y_ratio
+
+                    bw = bbox_pred[b, ind, a, 2] * anchors[a][0]  * 0.5
+                    bh = bbox_pred[b, ind, a, 3] * anchors[a][1]  * 0.5
 
                     bbox_out[b, ind, a, 0] = cx - bw
                     bbox_out[b, ind, a, 1] = cy - bh

@@ -9,11 +9,10 @@ from numba import jit
 from ..proj_utils.local_utils import getfileinfo, writeImg, imread, imresize
 
 
-debug_mode = False
+debug_mode = True
 # Load annotated bounding box mat file
 def load_mat(thismatfile, contourname_list=['Contours']):
     # First try load using h5py; then try using scipy.io.loadmat
-    pdb.set_trace()
     try:
         mat_file = h5py.File(thismatfile, 'r')
         for contourname in contourname_list:

@@ -2,7 +2,6 @@
 *.o
 *.so
 *.ipynb
-*.pyx
 
 # Folders
 data/

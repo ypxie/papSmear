@@ -18,7 +18,7 @@ def set_args():
     # Arguments setting
     parser = argparse.ArgumentParser(description = 'Pap Smear Bounding Box Detection')
 
-    parser.add_argument('--device_id',  type=int, default=5, help='which device')
+    parser.add_argument('--device_id',  type=int, default=0, help='which device')
     parser.add_argument('--batch_size', type=int, default=8, help='batch size.')
     parser.add_argument('--img_size',   default=[256, 320, 352], help='output image size')
 
@@ -42,7 +42,8 @@ def set_args():
 
 if  __name__ == '__main__':
     args = set_args()
-    DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    # DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    DatasetDir = "/home/pingjun/GitHub/papSmear"
     model_root = os.path.join(DatasetDir, 'models')
     data_root = os.path.join(DatasetDir, 'data/training')
 
