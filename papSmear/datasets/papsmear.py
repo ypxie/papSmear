@@ -9,10 +9,11 @@ from numba import jit
 from ..proj_utils.local_utils import getfileinfo, writeImg, imread, imresize
 
 
-debug_mode = True
+debug_mode = False
 # Load annotated bounding box mat file
 def load_mat(thismatfile, contourname_list=['Contours']):
     # First try load using h5py; then try using scipy.io.loadmat
+    pdb.set_trace()
     try:
         mat_file = h5py.File(thismatfile, 'r')
         for contourname in contourname_list:
@@ -189,8 +190,8 @@ class papSmearData:
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
         self.mat_list_ = [this_dict['thismatfile'] for this_dict in all_dict_list]
 
-        self.img_list  = self.img_list_ if debug_mode else [imread(img_path) for img_path in self.img_list_]
         self.mat_list  = self.mat_list_ if debug_mode else [load_mat(mat_path, contourname_list=['Contours']) for mat_path in self.mat_list_]
+        self.img_list  = self.img_list_ if debug_mode else [imread(img_path) for img_path in self.img_list_]
         self.img_num      = len(all_dict_list)
         self.img_shape    = img_shape
         self._img_shape   = img_shape
