@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
-FILE_PATH = os.path.abspath(__file__)
-PRJ_PATH = os.path.dirname(os.path.dirname(FILE_PATH))
-sys.path.append(PRJ_PATH)
+
+import os, sys, pdb
+sys.path.insert(0, '..')
 
 from papSmear.darknet import Darknet19
 from papSmear.datasets.papsmear import testingData as Dataset
@@ -16,22 +16,32 @@ import torch
 
 def set_args():
     parser = argparse.ArgumentParser(description = 'Testing code for pap smear detection')
-    parser.add_argument('--batch-size',      type=int, default=1)
-    parser.add_argument('--device-id',       type=int, default=1)
-    parser.add_argument('--resize-ratio',    type=list, default=[0.6])
-    parser.add_argument('--load_from_epoch', type=str, default="06000")
-    parser.add_argument('--model_name',      type=str, default='yolo_pap_best')
+    parser.add_argument('--batch_size',      type=int, default=1) # has to be 1 for testing.
+    parser.add_argument('--device_id',       type=int, default=0)
+    parser.add_argument('--resize_ratio',    type=list, default=[0.6])
+    parser.add_argument('--load_from_epoch', type=int, default= 280)
+    parser.add_argument('--model_name',      type=str, default='yolo_pap_seg')
     args = parser.parse_args()
 
     return args
 
 if  __name__ == '__main__':
-    # Setting model, testing data and result path
-    DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
-    model_root = os.path.join(DatasetDir, 'models')
-    data_root =  os.path.join(DatasetDir, 'data/testing')
-    save_root =  os.path.join(DatasetDir, 'data/Results')
+    proj_root = os.path.join('..')
+    model_root = os.path.join(proj_root, 'Model')
+    mkdirs([model_root])
+
+    home = os.path.expanduser('~')
+    data_root = os.path.join(home, 'DataSet','papSmear')
+
+    save_root = os.path.join(data_root,'rectangle')
     mkdirs(save_root)
+
+    # Setting model, testing data and result path
+    #DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    #model_root = os.path.join(DatasetDir, 'models')
+    #data_root =  os.path.join(DatasetDir, 'data/testing')
+    #save_root =  os.path.join(DatasetDir, 'data/Results')
+    #mkdirs(save_root)
 
     # Config arguments
     args = set_args()
@@ -44,8 +54,8 @@ if  __name__ == '__main__':
     cuda_avail = torch.cuda.is_available()
     if cuda_avail:
         net.cuda(args.device_id)
-        import torch.backends.cudnn as cudnn
-        cudnn.benchmark = True
+        #import torch.backends.cudnn as cudnn
+        #cudnn.benchmark = True
 
     print('>> START testing ')
     model_name ='{}'.format(args.model_name)

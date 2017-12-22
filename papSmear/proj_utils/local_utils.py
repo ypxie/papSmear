@@ -800,6 +800,7 @@ def mask2contour(org, mask, **kwargs):
         contour = contour.astype(int)
         #plt.plot(contour[:, 1], contour[:, 0], linewidth=2)
         contour_mask[contour[:, 0], contour[:, 1]] = 1
+        #contour_mask[contour[:, 1], contour[:, 0]] = 1
 
     # dialte the image based on linewidth
     se = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(param.linewidth,param.linewidth))

@@ -6,10 +6,9 @@ import h5py
 from scipy.io import loadmat
 from multiprocessing import Pool
 from numba import jit
-from ..proj_utils.local_utils import getfileinfo, writeImg, imread, imresize
+from ..proj_utils.local_utils import getfileinfo, writeImg, imread, imresize, roipoly, imshow
 
-
-debug_mode = True
+debug_mode = False
 # Load annotated bounding box mat file
 def load_mat(thismatfile, contourname_list=['Contours']):
     # First try load using h5py; then try using scipy.io.loadmat
@@ -41,6 +40,17 @@ def resize_mat(contour_mat, resize_ratio):
         res_contour.append(thiscontour * resize_ratio)
     return res_contour
 
+def safe_boarder(xcontour, ycontour, row, col):
+    '''
+    board_seed: N*2 represent row and col for 0 and 1 axis.
+    '''
+    xcontour[xcontour[:,0] < 0] = 0
+    xcontour[xcontour[:,0] >= col] = col-1
+
+    ycontour[ycontour[:,0] < 0] = 0
+    ycontour[ycontour[:,0] >= row] = row-1
+    
+    return xcontour, ycontour
 
 @jit
 def get_bbox(contour_mat):
@@ -56,23 +66,75 @@ def get_bbox(contour_mat):
         bbox_list.append([x_min, y_min, x_max, y_max])
     return bbox_list
 
+def get_single_mask(thiscontour, mask_size):
+    row_size, col_size = mask_size
+    xcontour = np.reshape(thiscontour[0,:], (1,-1) )
+    ycontour = np.reshape(thiscontour[1,:], (1,-1) )
+    x_min, x_max = np.min(xcontour), np.max(xcontour)
+    y_min, y_max = np.min(ycontour), np.max(ycontour)
+    
+    temprow = y_max - y_min + 1
+    tempcol = x_max - x_min + 1
+    
+    x_ratio = float(row_size )/tempcol
+    y_ratio = float(col_size )/temprow
+
+    norm_xcont = (xcontour - x_min)*x_ratio
+    norm_ycont = (ycontour - y_min)*y_ratio
+
+    norm_xcont, norm_ycont = safe_boarder(norm_xcont,norm_ycont, row_size, col_size )
+    tempmask = roipoly(row_size, col_size, norm_xcont, norm_ycont)
+
+    return tempmask
+
+# def get_mask(contour_mat, mask_size):
+#     numCell = len(contour_mat)
+#     mask_list = []
+#     row_size, col_size = mask_size
+#     for icontour in range(0, numCell):
+#         thiscontour = contour_mat[icontour]
+#         xcontour = np.reshape(thiscontour[0,:], (1,-1) )
+#         ycontour = np.reshape(thiscontour[1,:], (1,-1) )
+#         x_min, x_max = np.min(xcontour), np.max(xcontour)
+#         y_min, y_max = np.min(ycontour), np.max(ycontour)    
+#         bbox_list.append([x_min, y_min, x_max, y_max])    
+#         temprow = y_max - y_min + 1
+#         tempcol = x_max - x_min + 1
+#         x_ratio = float(row_size )/tempcol
+#         y_ratio = float(col_size )/temprow
+#         norm_xcont = (xcontour - x_min)*x_ratio
+#         norm_ycont = (ycontour - y_min)*y_ratio
+#         norm_xcont, norm_ycont = safe_boarder(norm_xcont,norm_ycont, row_size, col_size )
+#         #mask = np.zeros((row_size, col_size))
+#         #for idx in range(norm_xcont.shape[1]):
+#         #    x, y = norm_xcont[0,idx],norm_ycont[0,idx]
+#         #    mask[int(y), int(x)] = 1
+#         #import pdb
+#         #pdb.set_trace()
+#         #print(norm_xcont, np.min(norm_xcont), np.max(norm_xcont))
+#         #print(row_size, col_size)    
+#         #imshow(mask)
+#         tempmask = roipoly(row_size, col_size, norm_xcont, norm_ycont)
+#         #print(tempmask.shape)
+#         #imshow(tempmask)
+#         mask_list.append(tempmask)
+#     return mask_list
+
 
 @jit
-def overlay_bbox(img, bbox,len=1):
+def overlay_bbox(img, bbox,linewidth=1):
     for bb in bbox:
         x_min_, y_min_, x_max_, y_max_ = bb
         x_min_, y_min_, x_max_, y_max_ = int(x_min_),int( y_min_), int(x_max_), int(y_max_)
-        img[:,:,0] = change_val(img[:,:,0], 255, len, x_min_, y_min_, x_max_, y_max_)
-        img[:,:,1] = change_val(img[:,:,1], 0, len,  x_min_, y_min_, x_max_, y_max_)
-        img[:,:,2] = change_val(img[:,:,2], 0, len,  x_min_, y_min_, x_max_, y_max_)
+        img[:,:,0] = change_val(img[:,:,0], 255, linewidth, x_min_, y_min_, x_max_, y_max_)
+        img[:,:,1] = change_val(img[:,:,1], 0, linewidth,  x_min_, y_min_, x_max_, y_max_)
+        img[:,:,2] = change_val(img[:,:,2], 0, linewidth,  x_min_, y_min_, x_max_, y_max_)
     return img
 
-
-
 @jit
-def change_val(img,val, len, x_min, y_min, x_max, y_max):
-    left_len  = (len-1)//2
-    right_len = (len-1) - left_len
+def change_val(img,val, linewidth, x_min, y_min, x_max, y_max):
+    left_len  = (linewidth-1)//2
+    right_len = (linewidth-1) - left_len
     row_size, col_size = img.shape[0:2]
     for le in range(-left_len, right_len + 1):
         y_min_ = max(0, y_min + le )
@@ -87,8 +149,6 @@ def change_val(img,val, len, x_min, y_min, x_max, y_max):
         img[y_max_:y_max_+1, x_min_:x_max_] = val
     return img
 
-
-
 def get_anchor(row_size, col_size, img_shape, boarder=0):
     dst_row, dst_col = img_shape
     br, bc = int(boarder*row_size), int(boarder*col_size)
@@ -98,11 +158,11 @@ def get_anchor(row_size, col_size, img_shape, boarder=0):
     return (upleft_row, upleft_col)
 
 
-
-def crop_bbox(bbox_list, r_min, c_min, r_max, c_max):
+def crop_bbox(bbox_list, contour_mat, r_min, c_min, r_max, c_max, mask_size):
     numCell = len(bbox_list)
-    new_bbox = []
+    new_bbox, mask_bbox_list, mask_list = [], [], []
     for idx in range(0, numCell):
+        thiscontour = contour_mat[idx]
         this_bbox = bbox_list[idx]
         x_min_, y_min_, x_max_, y_max_ = this_bbox
 
@@ -128,18 +188,21 @@ def crop_bbox(bbox_list, r_min, c_min, r_max, c_max):
                 new_bbox.append([x_min, y_min, x_max, y_max] )
         else:
             new_bbox.append([x_min, y_min, x_max, y_max])
-    return new_bbox
-
-
-
+            
+            mask_bbox_list.append([x_min, y_min, x_max, y_max])
+            this_mask = get_single_mask(thiscontour, mask_size)
+            mask_list.append(this_mask)
+    
+    return new_bbox, mask_list, mask_bbox_list
 
 def _get_next(inputs):
-    img_data, mat_data, img_path, mat_path, resize_ratio, img_shape, testing = inputs
+    img_data, mat_data, img_path, mat_path, resize_ratio, img_shape, testing, mask_size = inputs
 
     org_img = imread(img_path) if debug_mode else img_data #
     org_mat = load_mat(mat_path, contourname_list=['Contours']) if debug_mode else mat_data #
 
     try_box = 0
+    mask_list = []
     while try_box <= 5:
         try_count = 0
         while True:
@@ -166,10 +229,11 @@ def _get_next(inputs):
 
         bbox =  get_bbox(res_mat)
         r_min, c_min, r_max, c_max = up_r, up_c, up_r+dst_row, up_c+dst_col
+        
         this_patch = res_img[r_min:r_max, c_min:c_max, :]
-
         this_patch = this_patch.transpose(2, 0, 1)
-        this_bbox = crop_bbox(bbox, r_min, c_min, r_max, c_max)
+
+        this_bbox, mask_list, mask_bbox_list = crop_bbox(bbox, res_mat, r_min, c_min, r_max, c_max, mask_size)
         num_bbox  = len(this_bbox)
         classes = np.zeros((num_bbox), dtype=np.int32)
         if len(this_bbox) != 0:
@@ -177,7 +241,7 @@ def _get_next(inputs):
         else:
             try_box += 1
 
-    return (this_patch, this_bbox, classes, img_path, res_img)
+    return (this_patch, this_bbox, classes, img_path, res_img, mask_list, mask_bbox_list)
 
 
 class papSmearData:
@@ -188,13 +252,13 @@ class papSmearData:
         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat')
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list]
         self.mat_list_ = [this_dict['thismatfile'] for this_dict in all_dict_list]
-
+        
         self.mat_list  = self.mat_list_ if debug_mode else [load_mat(mat_path, contourname_list=['Contours']) for mat_path in self.mat_list_]
         self.img_list  = self.img_list_ if debug_mode else [imread(img_path) for img_path in self.img_list_]
         self.img_num      = len(all_dict_list)
         self.img_shape    = img_shape
         self._img_shape   = img_shape
-
+        self.mask_size    = [64,64]
         self.resize_ratio = resize_ratio
         self.testing = testing
         self.overlay_bbox = overlay_bbox
@@ -226,7 +290,6 @@ class papSmearData:
                 bbox_all.extend(bbox)
         return np.asarray(bbox_all)
 
-
     def overlayImgs(self, save_path):
         num_img = len(self.img_list)
         for idx in range(num_img):
@@ -238,33 +301,44 @@ class papSmearData:
             writeImg(overlayed_img, os.path.join(save_path, img_name))
 
     def next_batch(self):
-        batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
+        batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 
+                 'origin_im': [], 'mask_list':[], 'mask_bbox_list':[]}
         this_num = min(self.img_num - self.batch_size*self.batch_count, self.batch_size)
         diff = self.batch_size-this_num
         start = self.start - diff
 
         this_batch_indices = self.indices[start: self.start+this_num]
-        targets = self.pool.imap(_get_next,
+        if debug_mode is False:
+            targets = self.pool.imap(_get_next,
                      ( (self.img_list[i], self.mat_list[i], self.img_list_[i], self.mat_list_[i],
-                        self.resize_ratio,self.img_shape, self.testing) for i in this_batch_indices) )
+                        self.resize_ratio,self.img_shape, self.testing, self.mask_size) for i in this_batch_indices) )
 
         #print('len of targets and batch_size: ',start, self.start, this_num, len(this_batch_indices), self.batch_size)
         self.start += this_num
         self.batch_count += 1
         i = 0
         while i < self.batch_size:
-            images, gt_boxes, classes, dontcare, origin_im = targets.__next__()
+            if debug_mode is False:
+                images, gt_boxes, classes, dontcare, origin_im, mask_list, mask_bbox_list = targets.__next__()
+            else:
+                images, gt_boxes, classes, dontcare, origin_im, mask_list, mask_bbox_list = _get_next(
+                    (self.img_list[i], self.mat_list[i], self.img_list_[i], self.mat_list_[i],
+                    self.resize_ratio,self.img_shape, self.testing, self.mask_size))
+
             if len(gt_boxes) > 0:
                 batch['images'].append(images)
                 batch['gt_boxes'].append(gt_boxes)
                 batch['gt_classes'].append(classes)
                 batch['dontcare'].append(dontcare)
                 batch['origin_im'].append(origin_im)
+                batch['mask_list'].append(mask_list)
+                batch['mask_bbox_list'].append(mask_bbox_list)
             i += 1
 
         img_array = np.stack(batch['images'], 0)
         batch['images'] = img_array * (2. / 255) - 1.
-
+        #batch['mask_list'] = np.stack(batch['mask_list'], 0)
+        
         if self.start >= self.img_num:
             if self._shuffle:
                 np.random.shuffle(self.indices)
@@ -299,8 +373,6 @@ class papSmearData:
     @property
     def batch_per_epoch(self):
         return (self.img_num + self.batch_size -1) // self.batch_size
-
-
 
 class testingData:
     def __init__(self, data_dir, batch_size, resize_ratio=[0.6], test_mode=True):
