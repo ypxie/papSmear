@@ -101,7 +101,6 @@ class plot_scalar(object):
                 env=self.env,
                 opts=dict(title=self.name)
             )
-
         self.reset()
 
 
@@ -166,7 +165,7 @@ def display_timeseries(strumodel, BatchData, BatchLabel, plot=None, name='defaul
     #       opts=dict(title = name + '_diff_ratio'), env = name)
 
 def save_images(X, save_path=None, save=True, dim_ordering='tf'):
-    # X: B*C*H*W or list of X
+    # X: B*C*H*W or list of B*C*H*W 
     if type(X) is list:
         return save_images_list(X, save_path, save, dim_ordering)
     else:
@@ -204,7 +203,7 @@ def save_images(X, save_path=None, save=True, dim_ordering='tf'):
 def save_images_list(X_list, save_path=None, save=True, dim_ordering='tf'):
 
     # X_list: list of X
-    # X: B*C*H*W
+    # X: B*C*H*W if dim_order == 'tf' else BHWC
 
     X = X_list[0]
     n_samples = X.shape[0]

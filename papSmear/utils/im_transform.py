@@ -8,7 +8,7 @@ def imcv2_recolor(im, a=.1):
     # t += [np.random.uniform()]
     # t = np.array(t) * 2. - 1.
     t = np.random.uniform(-1, 1, 3)
-
+    
     # random amplify each channel
     im = im.astype(np.float)
     im *= (1 + t * a)
@@ -17,7 +17,6 @@ def imcv2_recolor(im, a=.1):
     im = np.power(im / mx, 1. + up * .5)
     # return np.array(im * 255., np.uint8)
     return im
-
 
 def imcv2_affine_trans(im):
     # Scale and translate

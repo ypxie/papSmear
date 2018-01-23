@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import os, sys
 import math
 import numpy as np
@@ -105,30 +103,42 @@ def split_testing(cls, img,  batch_size = 4, windowsize=None, thresh= None, cfg=
     results['bbox'] = np.concatenate(results['bbox'], 1)
     results['iou']  = np.concatenate(results['iou'], 1)
     results['prob'] = np.concatenate(results['prob'], 1)
-    
+
     return results
 
-def get_feat_bbox(pred_boxes, featMaps, dest_size=[32,32], org_img=None):
+def get_feat_bbox(pred_boxes, featMaps, dest_size=[32,32], org_img=None, board_ratio=0.1):
     croped_feat_list=[]
     org_size, org_coord, patch_list = [], [], []
+    img_row, img_col = featMaps.size()[2::]
     for img_idx, this_bbox_list in enumerate(pred_boxes):
         for bidx, bb in enumerate(this_bbox_list):
             x_min_, y_min_, x_max_, y_max_ = bb
             x_min_, y_min_, x_max_, y_max_ = int(x_min_),int( y_min_), int(x_max_), int(y_max_)
-            row_size = x_max_ - x_min_ + 1
-            col_size = y_max_ - y_min_ + 1
-            this_featmap   = featMaps[img_idx:img_idx+1,:, y_min_:y_max_+1, x_min_:x_max_+1]
-            this_patch     = org_img[:, y_min_:y_max_+1, x_min_:x_max_+1]
+            col_size  = x_max_ - x_min_ + 1
+            row_size  = y_max_ - y_min_ + 1
+
+            boarder_row = int(board_ratio * row_size)
+            boarder_col = int(board_ratio * col_size)
+
+            xmin, ymin = x_min_ - boarder_col, y_min_ - boarder_row
+            xmax, ymax = x_max_ + boarder_col, y_max_ + boarder_col
+
+            xmin, ymin = max(xmin, 0), max(ymin,0)
+            xmax, ymax = min(xmax, img_col), min(ymax,img_row)
+
+            final_col_size  = xmax - xmin + 1
+            final_row_size  = ymax - ymin + 1
             
+            this_featmap   = featMaps[img_idx:img_idx+1,:, ymin:ymax+1, xmin:xmax+1]
+            this_patch     = org_img[:, ymin:ymax+1, xmin:xmax+1]
+            #import pdb; pdb.set_trace();
             resize_featmap = resize_layer(this_featmap, dest_size)
-            
             croped_feat_list.append(resize_featmap)
-            org_size.append([row_size, col_size])
-            org_coord.append([y_min_, x_min_])
+            org_size.append([final_row_size, final_col_size])
+            org_coord.append([ymin, xmin])
             patch_list.append(this_patch)
 
     croped_feat_nd = torch.cat(croped_feat_list, 0)
-    
     return croped_feat_nd, org_size, org_coord, patch_list
 
 def batch_mask_forward(net, feat_nd, batch_size=128 ):
@@ -142,18 +152,32 @@ def batch_mask_forward(net, feat_nd, batch_size=128 ):
     total_pred = torch.cat(mask_pred_list, 0)
     return total_pred
 
-def mask2contour(mask_pred, org_size_list, org_coord_list, patch_list):
+def get_contour(mask_boarder):
+    contours = measure.find_contours(mask_boarder, 0)
+    area_list = []
+    for this_contour in contours:
+        min_r, max_r, min_c, max_c = np.min(this_contour[:,0]), np.max(this_contour[:,0]), \
+                                        np.min(this_contour[:,1]), np.max(this_contour[:,1])   
+        area_list.append( (max_r-min_r ) * (max_c-min_c ) )
+    ind = np.argmax(area_list)
+    return contours[ind]
+
+def mask2contour(mask_pred, org_size_list, org_coord_list, patch_list, img_size):
     total_num = mask_pred.shape[0]
     contour_list = []
-    
+    img_row_size, img_col_size = img_size
+
     for idx in range(total_num):
         this_mask = mask_pred[idx][0] # row x col
         row, col  = this_mask.shape
         mask_boarder = np.zeros((row+2, col+2)).astype(np.int)
         this_mask = this_mask.astype(int)
         mask_boarder[1:-1, 1:-1] = this_mask
-        
-        contours = measure.find_contours(mask_boarder, 0)[0] # list of N*2
+        #imshow(mask_boarder)
+        #if idx == 70:
+        #    import pdb; pdb.set_trace()
+
+        contours = get_contour(mask_boarder) # list of N*2
         contours = contours - np.array([1,1])
 
         row_ratio = float(org_size_list[idx][0])/ row
@@ -165,15 +189,26 @@ def mask2contour(mask_pred, org_size_list, org_coord_list, patch_list):
         #import pdb; pdb.set_trace()
         #imshow(patch_list[idx][0])
         #imshow(mask_boarder)
-        thiscontour = (contours + np.array([rs, cs])).astype(int)
+        thiscontour = np.floor(contours + np.array([rs, cs]))
+        thiscontour = thiscontour[:,np.array([1,0])] # to make it as [x, y]
+        
+        thiscontour[thiscontour[:,0] < 0, 0] = 0
+        thiscontour[thiscontour[:,0] >= img_col_size, 0] = img_col_size-1
+
+        thiscontour[thiscontour[:,1] < 0, 1] = 0
+        thiscontour[thiscontour[:,1] >= img_row_size, 1] = img_row_size-1
+        
         contour_list.append(thiscontour)
     return contour_list
 
 def mark_contours(images, contour_list):        
+    images = np.transpose(images, (1,2,0))
     for idx, this_contour in enumerate(contour_list):
-        print("contour shape: ", this_contour.shape)
+        print("{}_th_contour shape: ".format(idx), this_contour.shape)
         this_contour = this_contour.astype(int)
-        row, col = this_contour[:,0],this_contour[:,1]
+        col, row = this_contour[:,0],this_contour[:,1]
+        
+        #print(images.shape)
         images[row,col,:] = 0
         #for idx in range(this_contour.shape[0]):
         #    x, y = this_contour[idx,0],this_contour[idx,1]
@@ -221,19 +256,20 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
         # from bboxes to feat and to mask
         print(bboxes.shape)
         # bbox N*4, (xs, ys, xe, ye)
-        cropped_feat, org_size_list, org_coord_list ,patch_list= get_feat_bbox(bboxes[None], feat_map, dest_size=[32,32], org_img= im_np)
-        mask_pred    = batch_mask_forward(net.seg_net, cropped_feat, batch_size=128 )
-        mask_pred    = mask_pred.data.cpu().numpy()
-        binary_mask  = mask_pred > 0.4
-        contour_list = mask2contour(binary_mask, org_size_list, org_coord_list, patch_list)
-
-        
-        naked_name = os.path.splitext(img_name)[0]
-        resultsDict = {'bbox':bboxes, 'contour':contour_list}
-        resultDictPath = os.path.join(save_folder, naked_name + '_res.h5')
-
-        
-        dd.io.save(resultDictPath, resultsDict, compression=None)    #compression='zlib'        
+        if 1:
+            cropped_feat, org_size_list, org_coord_list ,patch_list= get_feat_bbox(bboxes[None], feat_map, dest_size=[64,64], org_img= im_np)
+            mask_pred    = batch_mask_forward(net.seg_net, cropped_feat, batch_size=128 )
+            mask_pred    = mask_pred.data.cpu().numpy()
+            binary_mask  = mask_pred > 0.4
+            contour_list = mask2contour(binary_mask, org_size_list, org_coord_list, patch_list, im_np.shape[1::])
+            contour_list = [this_contour /args.resize_ratio[0] for this_contour in contour_list]
+            naked_name   = os.path.splitext(img_name)[0]
+            resultsDict = {'bbox':bboxes, 'contour':contour_list}
+            resultDictPath = os.path.join(save_folder, naked_name + '_res.h5')
+            dd.io.save(resultDictPath, resultsDict, compression=None)    #compression='zlib'        
+            
+            marked_images = mark_contours(ori_im.copy(), contour_list).astype(np.uint8)
+            writeImg(marked_images, os.path.join(save_masked_folder, img_name))
 
         print('{}/{} detection time {:.4f}, post_processing time {:.4f}'.format(i+1, num_images, detect_time, utils_time))
         ori_im = ori_im.transpose(1,2,0)
@@ -243,8 +279,7 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
         writeImg(overlaid_img, os.path.join(save_folder, img_name))
 
         # mark the contours on the images
-        marked_images = mark_contours(ori_im.copy(), contour_list).astype(np.uint8)
-        writeImg(marked_images, os.path.join(save_masked_folder, img_name))
+        
 
     # bbox_file = os.path.join(save_folder, 'bbox_file.pkl')
     # with open(bbox_file, 'wb') as f:

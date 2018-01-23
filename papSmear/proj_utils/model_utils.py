@@ -51,7 +51,7 @@ def weights_init(m):
 
 class padConv2d(nn.Module):
     def __init__(self, in_dim, out_dim, kernel_size=1, 
-                 stride=1, padding=None ,bias=False):
+                 stride=1, padding=None ,bias=False, dilation=1):
         super(padConv2d, self).__init__()
 
         if padding is None:
@@ -60,8 +60,10 @@ class padConv2d(nn.Module):
             left_col  = (kernel_size - 1) //2
             right_col = (kernel_size - 1) - left_col
             self.padding = (left_row, right_row, left_col, right_col)
-        else:
+        elif type(padding) is int:
             self.padding = (padding, padding, padding, padding)
+        else:
+            self.padding = padding  
 
         self.conv2d  = nn.Conv2d(in_dim, out_dim, kernel_size=kernel_size, 
                                  padding=0, bias=bias, stride=stride)
@@ -78,10 +80,10 @@ def up_conv(in_dim, out_dim, norm, activ, repeat=1, get_layer = False):
     _layers += [activ]
 
     for _ in range(repeat-1):
-        _layers += [nn.Conv2d(out_dim,  out_dim,  kernel_size = 1, padding=0)]
+        _layers += [padConv2d(out_dim,  out_dim,  kernel_size = 1, padding=0)]
         _layers += [getNormLayer(norm)(out_dim )]
         _layers += [activ]
-    
+        
     if get_layer:
         return nn.Sequential(*_layers)
     else:
@@ -93,7 +95,7 @@ def down_conv(in_dim, out_dim, norm, activ, repeat=1,
     _layers += [getNormLayer(norm)(out_dim )]
     _layers += [activ]
     for _ in range(repeat):
-        _layers += [nn.Conv2d(out_dim,  out_dim, kernel_size = 1, padding=0, bias=False)]
+        _layers += [padConv2d(out_dim,  out_dim, kernel_size = 1, padding=0, bias=False)]
         _layers += [getNormLayer(norm)(out_dim )]
         _layers += [activ]
     if get_layer:
@@ -128,7 +130,7 @@ def brach_out(in_dim, out_dim, norm, activ, repeat= 1, get_layer = False):
         _layers += [getNormLayer(norm)(in_dim )]
         _layers += [activ]
     
-    _layers += [nn.Conv2d(in_dim,  out_dim, 
+    _layers += [padConv2d(in_dim,  out_dim, 
                 kernel_size = 1, padding=0, bias=False)]    
     _layers += [nn.Tanh()]
 
@@ -142,12 +144,12 @@ class Bottleneck(nn.Module):
     expansion = 4
     def __init__(self, inplanes, planes, stride = 1, kernel_size=3, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False) # change
+        self.conv1 = padConv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False) # change
         self.bn1   = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=1, # change
+        self.conv2 = padConv2d(planes, planes, kernel_size=kernel_size, stride=1, # change
                                padding= (kernel_size-1)//2, bias=False)
         self.bn2   = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes , kernel_size=1, bias=False)
+        self.conv3 = padConv2d(planes, planes , kernel_size=1, bias=False)
         self.bn3   = nn.BatchNorm2d(planes )
         self.relu  = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -235,46 +237,6 @@ def batch_forward(cls, BatchData, batch_size,**kwards):
         results.append(cls.forward(data, **kwards))
     return torch.cat(results, dim=0)
 
-def split_testing(cls, inputs,  batch_size = 4, windowsize=None, testing= True,stateful=False):
-    # since inputs is (B, T, C, Row, Col), we need to make (B*T*C, Row, Col)
-    #windowsize = self.row_size
-    board = 20
-    adptive_batch_size=False # cause we dont need it for fixed windowsize.
-    
-    B, T, C, Row, Col = inputs.shape
-    batched_imgs = inputs.reshape((B, T*C, Row, Col))
-    outputs = np.zeros_like(inputs) # we don't consider multiple outputs
-
-    for idx, img in enumerate(batched_imgs):  # this function only consider batch==1 case.
-        PatchDict = split_img(img, windowsize = windowsize, board = board, fixed_window= True,step_size=None)
-        output = None
-        all_keys = PatchDict.keys()
-        for this_size in all_keys:
-            BatchData, org_slice_list, extract_slice_list = PatchDict[this_size]
-            if adptive_batch_size == True:
-                old_volume = batch_size * windowsize * windowsize
-                new_bs = int(np.floor( 1.0*old_volume/np.prod(this_size)))
-            else:
-                new_bs = batch_size
-            #print(new_bs, BatchData.shape[0])
-            bat, time, rows, cols = BatchData.shape
-            BatchData = BatchData.reshape((bat, time, C, rows, cols))
-            thisprediction  =  batch_forward(cls, BatchData, batch_size, testing= testing,stateful=stateful)
-            thisprediction  = thisprediction.cpu().numpy()
-            #if type(thisprediction) != list:
-            #    thisprediction = [thisprediction]
-            #    thisprediction = [pred.cpu().numpy() for pred in thisprediction]
-            if output is None:
-                output = np.zeros((T, C, Row, Col))
-            #[np.zeros( (B, T, C, Row, Col)) for _ in range(len(thisprediction))]
-            #for odx, pred in enumerate(thisprediction) :
-            for idx_, _ in enumerate(org_slice_list):
-                org_slice = org_slice_list[idx_]
-                extract_slice = extract_slice_list[idx_]
-                output[: ,:, org_slice[0], org_slice[1]] = thisprediction[idx_][:,:,extract_slice[0], extract_slice[1]]
-
-        outputs[idx] = output
-    return outputs
 
 def spatial_pool(x, keepdim=True):
     # input should be of N * channel * row * col
@@ -344,165 +306,6 @@ def position_encoding_init(n_position, d_pos_vec):
     position_enc[1:, 1::2] = np.cos(position_enc[1:, 1::2]) # dim 2i+1
     return torch.from_numpy(position_enc).type(torch.FloatTensor)
 
-class MultiHeadAttention(nn.Module):
-    #''' Multi-Head Attention module '''
-    def __init__(self, in_chans, output_chans, n_head, dilation_list, context_size = None, 
-                 pos_emb_size = None, dropout=0.1, activ = 'selu', norm='bn'):
-        super(MultiHeadAttention, self).__init__()
-        self.max_pos_size = 100
-        self.register_buffer('device_id', torch.zeros(1))
-        self.n_head = n_head
-        self.in_chans = in_chans
-        self.pos_emb_size = output_chans if pos_emb_size is None else pos_emb_size
-
-        self.output_chans = output_chans
-        #self.compose_chans = output_chans + pos_emb_size
-
-        #self.split_size = self.compose_chans//n_head # need to check whether mode==0
-        self.conv_split_size = self.output_chans//n_head
-        self.split_size = self.conv_split_size + pos_emb_size
-
-        self.conv_mem   = nn.Conv2d(in_chans, output_chans, kernel_size= 3, padding=1, stride=1)
-        self.conv_query = nn.Conv2d(in_chans, output_chans, kernel_size=3,  padding=1, stride=1)
-        
-        self.strength_transform = DenseStack(self.split_size, 64, 1, 1, activ=activ)
-        self.dropout = nn.Dropout(dropout)
-        #dilation_list  = [1, 2, 2, 4]
-        
-        self.spatial_atten = spatialAttention(in_chans, output_chans, dilation_list=dilation_list,
-                                              activ=activ, norm=norm)
-        self.context_size = context_size if context_size is not None else np.inf
-        
-        self.position_enc = nn.Embedding(self.max_pos_size, self.pos_emb_size, padding_idx = 0)
-        self.position_enc.weight.data = position_encoding_init(self.max_pos_size, self.pos_emb_size)
-
-        self.reset()
-        
-    def reset(self):
-        self.mem_que = deque([], self.context_size)  # queue of tensor(bs, ch, row, col)
-        self.pos_que = deque([], self.context_size)  # queue of tensor(1, self.split_size)
-        
-    def _update_mem_que(self, new_memory, org_mem_size, pos, testing=False):
-        '''
-        This function update self.mem_que using the new_memory
-        -----------
-        Parameters:
-            new_memory (bs*len, outChan, row, col)
-            org_mem_size is a tuple(bs, len, chn, row, col) the size of memory before conv
-            pos: has to be torch int variable
-        -----------
-        Return:
-            updated Mem_tensor (bs*len, chn, row, col)
-        '''
-        batch_size, len_mem, chn_mem, row, col = org_mem_size
-        _, output_chans, _, _ = new_memory.size()
-        
-        memory = new_memory.view(batch_size, len_mem, output_chans, row, col)
-        pos_emb = self.position_enc(pos)
-
-        # we try to not include this memory.
-        for idx in range(len_mem):
-            self.mem_que.append(memory[:, idx])
-            self.pos_que.append(pos_emb[idx])
-
-        running_mem = torch.stack(self.mem_que, 1) # (bs, len, ch, row, col)
-        running_pos = torch.stack(self.pos_que, 1) #(1, len, pos_emb_size)
-
-        # we don't allow the memory to atten to current step except the first time step. Not a good idea?
-        #if len(self.mem_que) > 1:
-        #    self.updated_mem_len = len(self.mem_que) - 1
-        #    running_mem = running_mem[:, 0:-1].contiguous()
-        #    running_pos = running_pos[:,0:-1].contiguous()
-        #else:
-
-        self.updated_mem_len = len(self.mem_que)
-        
-        running_mem = running_mem.view(batch_size, self.updated_mem_len, output_chans, row, col)
-        
-        return running_mem, running_pos
-    
-    def get_pos_emb(self):
-        pass
-
-    def forward(self, query_maps, new_mem_maps, pos, eval=True,testing=False):
-        '''
-        we do attention for each time step seperately. so no need to mask anything.
-        return (bs, nhead*split_size, row, col)
-        ---------------------
-        Parameters:
-            query_maps (bs, len, chn, row, col) or (bs, chn, row, col) will add 1 dim automatically
-            new_mem_maps (bs, len, chn, row, col) or (bs, chn, row, col) will add 1 dim automatically
-            pos is a list of [1,2,3,4,5,6,7]
-        Return:
-            tensor of size (bd, output_chans, row, col)
-        '''
-        n_head, split_size = self.n_head, self.split_size
-
-        if len(new_mem_maps.size()) == 4:
-            new_mem_maps = new_mem_maps.unsqueeze(1)
-        if len(query_maps.size()) == 4:
-            query_maps = query_maps.unsqueeze(1)
-        
-        org_mem_size = new_mem_maps.size()
-
-        batch_size, len_mem, chn_mem, row, col = org_mem_size
-        batch_size, len_query, chn_query, row, col = query_maps.size()
-        
-        pos = [this_pos%self.context_size for this_pos in pos]
-        len_pos = len(pos)
-        pos = torch.from_numpy(np.asarray(pos).astype(np.int64)).unsqueeze(0)
-        pos = to_device(pos, self.device_id, requires_grad=False)
-        
-        reshape_query  = query_maps.view(batch_size*len_query, chn_query, row, col)
-        reshape_new_memory = new_mem_maps.view(batch_size*len_mem,  chn_mem, row, col)
-
-        querys  = self.conv_query(reshape_query) # (b*len_que, outChans, row, col)
-        this_memorys = self.conv_mem(reshape_new_memory)  # (b*len_mem, outChans, row, col)
-        # update running memory queu
-        # memory (bs, len, output_chans, row, col)
-        # pos_emb (1, len, pos_emb_size)
-        memory, mem_pos_emb = self._update_mem_que(this_memorys, org_mem_size, pos,testing)
-        query_pos_emb = self.position_enc(pos) #(1,len, pos_emb_size)
-
-        mem_pos_emb   = mem_pos_emb.expand(batch_size*n_head,   self.updated_mem_len, self.pos_emb_size)
-        query_pos_emb = query_pos_emb.expand(batch_size*n_head, len_query, self.pos_emb_size)
-        
-        if eval:
-            query_mean  = spatial_pool(querys).view(batch_size, len_query, self.output_chans)
-            memory_mean = spatial_pool(memory).view(batch_size, self.updated_mem_len, self.output_chans)
-            #compose pos_emb to mean
-            #querys_mean_comp = torch.cat([query_mean,  query_pos_emb], -1) #(bs, len, compose_size)
-            #mem_mean_comp    = torch.cat([memory_mean, mem_pos_emb], -1)     #(bs, len, compose_size)
-
-            query_mean_split  = torch.split(query_mean,  split_size=self.conv_split_size, dim = -1)
-            memory_mean_split = torch.split(memory_mean, split_size=self.conv_split_size, dim = -1)
-
-            #this part need to be double checked n_head ahead or not?
-            query_mean_split   = torch.stack(query_mean_split,  1).view(batch_size*n_head,  len_query,  self.conv_split_size) 
-            memory_mean_split  = torch.stack(memory_mean_split, 1).view(batch_size*n_head,  self.updated_mem_len, self.conv_split_size) 
-            
-            query_mean_split_comp  = torch.cat([query_mean_split,  query_pos_emb], -1)   #(bs*nhead, len, split_size)
-            memory_mean_split_comp = torch.cat([memory_mean_split, mem_pos_emb], -1)     #(bs*nhead, len, split_size)
-
-            strength = 1 + F.relu(self.strength_transform(query_mean_split_comp)) #(bs*nhead, len_query, 1)
-            # atten (batch_size, query_size, mem_slot)
-            time_attention = temperal_atten(query_mean_split_comp, memory_mean_split_comp, strength)
-
-            #(b, len_mem, outChans, row, col)
-            memory_split = torch.split(memory, split_size = self.conv_split_size, dim = 2)
-            #(b*len_mem, nhead, conv_split_size, row, col)
-            memory_split = torch.stack(memory_split,  1)
-            memory_flat = memory_split.view(batch_size*n_head, self.updated_mem_len, -1)
-            
-            attned_mem = torch.bmm(time_attention, memory_flat) # (b*nhead, len_que, split_size*row*col)
-            attned_mem = attned_mem.view(batch_size, n_head, len_query, self.conv_split_size, row, col)
-            attned_mem = torch.transpose(attned_mem,2,1).contiguous() #(b, len_que, n_head, split_size, row, col)
-            attned_mem = attned_mem.view(batch_size, self.output_chans, row, col) 
-
-            spatial_atten_mem = self.spatial_atten(querys, attned_mem)
-            return spatial_atten_mem
-        else:
-            return None
 
 
 def match_tensor(out, refer_shape):
@@ -660,7 +463,7 @@ class ConvBN(nn.Module):
         p1 = redu//2
         p2 = redu - p1
         
-        self.conv = nn.Conv2d(inChans, outChans, kernel_size=kernel_size, padding= (p1, p2), dilation=dilation)
+        self.conv = padConv2d(inChans, outChans, kernel_size=kernel_size, padding= None, dilation=dilation)
         self.norm = getNormLayer(norm)(outChans)
         self.act  = Activation(outChans, activ = activ) if act is not None else passthrough()
 
@@ -687,7 +490,9 @@ class InputTransition(nn.Module):
         self.inputChans = inputChans
         super(InputTransition, self).__init__()
 
-        self.conv = nn.Conv2d(inputChans, outChans, kernel_size=3, padding=1)
+        self.conv = padConv2d(inputChans, outChans, kernel_size=3, padding=1)
+        #self.conv = padConv2d(inputChans, outChans, kernel_size=1, stride=1, padding=1)
+
         self.norm = getNormLayer(norm)(outChans)
         self.act  = Activation(outChans,activ=activ)
 
@@ -700,10 +505,10 @@ class DownTransition(nn.Module):
                  activ=True, norm = 'bn', pooling= False):
         super(DownTransition, self).__init__()
         if pooling:
-            self.down_conv = nn.Conv2d(inChans, outChans, kernel_size=3, padding=1, stride=1)
+            self.down_conv = padConv2d(inChans, outChans, kernel_size=3, padding=1, stride=1)
             self.max_pooling = nn.MaxPool2d(kernel_size = 2, stride=2)
         else:
-            self.down_conv = nn.Conv2d(inChans, outChans, kernel_size=3, padding=1, stride=2)
+            self.down_conv = padConv2d(inChans, outChans, kernel_size=3, padding=1, stride=2)
             self.max_pooling = passthrough()
         
         self.norm  = getNormLayer(norm)(outChans)
@@ -734,8 +539,7 @@ class UpConcat(nn.Module):
                                           padding=1, stride=stride, output_padding=1)
         self.norm = getNormLayer(norm)(hidChans)
         self.act1 = Activation(hidChans, activ= activ)
-        self.conv_ops = None if catChans is None else \
-                      _make_nConv(catChans, self.outChans, depth=nConvs, activ = activ, norm=norm)
+        self.conv_ops = _make_nConv(catChans + hidChans, self.outChans, depth=nConvs, activ = activ, norm=norm)
         self.act2 = Activation(outChans, activ= activ)
 
     def forward(self, x, skipx):
@@ -744,8 +548,7 @@ class UpConcat(nn.Module):
         out = self.norm(self.act1(self.up_conv(out)))
         out = match_tensor(out, skipxdo.size()[2:])
         xcat = torch.cat([out, skipxdo], 1)
-        if self.conv_ops is None:
-           self.conv_ops = _make_nConv(xcat.size()[1], self.outChans, depth=nConvs, activ = activ)
+        
         out  = self.conv_ops(xcat)
         out  = self.act2(out)
         return out
@@ -772,10 +575,10 @@ class UpConv(nn.Module):
 class OutputTransition(nn.Module):
     def __init__(self, inChans,outChans=1,hidChans=2,activ= True, norm='bn'):
         super(OutputTransition, self).__init__()
-        self.conv1 = nn.Conv2d(inChans, hidChans, kernel_size=5, padding=2)
+        self.conv1  = padConv2d(inChans, hidChans, kernel_size=5, padding=2)
         self.norm   = getNormLayer(norm)(hidChans)
-        self.act1 = Activation(hidChans, activ= activ)
-        self.conv2 = nn.Conv2d(hidChans,  outChans, kernel_size=1)
+        self.act1   = Activation(hidChans, activ= activ)
+        self.conv2  = padConv2d(hidChans,  outChans, kernel_size=1)
         
     def forward(self, x):
         # convolve 32 down to 2 channels
@@ -800,8 +603,8 @@ class ConvGRU_cell(nn.Module):
         self.dropout = dropout
         self.padding=(filter_size-1)//2 #in this way the output has the same size
         self.register_buffer('device_id', torch.zeros(1))
-        self.conv1_inp = nn.Conv2d(input_chans, 3*output_chans,  kernel_size=filter_size,  padding=self.padding, stride=1)
-        self.conv1_out = nn.Conv2d(output_chans, 3*output_chans, kernel_size=filter_size, padding=self.padding, stride=1)
+        self.conv1_inp = padConv2d(input_chans, 3*output_chans,  kernel_size=filter_size,  padding=self.padding, stride=1)
+        self.conv1_out = padConv2d(output_chans, 3*output_chans, kernel_size=filter_size, padding=self.padding, stride=1)
         
         self.act1  = Activation(output_chans, activ= activ)
 
@@ -854,4 +657,3 @@ class ConvGRU_cell(nn.Module):
 
     def init_hidden(self,batch_size, rowsize, colsize):
         return torch.zeros(batch_size,self.output_chans,rowsize, colsize)
-

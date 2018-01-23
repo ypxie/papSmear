@@ -4,13 +4,26 @@ from torch.autograd import Variable
 import numpy as np
 from ..proj_utils.model_utils import padConv2d
 
-class Conv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True):
-        super(Conv2d, self).__init__()
-        #padding = int((kernel_size - 1) / 2) if same_padding else 0
-        #self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding)
-        self.conv = padConv2d(in_channels, out_channels, kernel_size, stride, padding=None, bias=True)
+# class Conv2d(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True):
+#         super(Conv2d, self).__init__()
+#         #padding = int((kernel_size - 1) / 2) if same_padding else 0
+#         #self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding)
+#         self.conv = padConv2d(in_channels, out_channels, kernel_size, stride, padding=None, bias=True)
 
+#         self.relu = nn.LeakyReLU(0.1, inplace=True) if relu else None
+
+#     def forward(self, x):
+#         x = self.conv(x)
+#         if self.relu is not None:
+#             x = self.relu(x)
+#         return x
+
+class Conv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, same_padding=False):
+        super(Conv2d, self).__init__()
+        padding = int((kernel_size - 1) / 2) if same_padding else 0
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding)
         self.relu = nn.LeakyReLU(0.1, inplace=True) if relu else None
 
     def forward(self, x):
@@ -18,15 +31,14 @@ class Conv2d(nn.Module):
         if self.relu is not None:
             x = self.relu(x)
         return x
-
+        
 class Conv2d_BatchNorm(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, use_norm=True):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, same_padding=False):
         super(Conv2d_BatchNorm, self).__init__()
-        #padding = int((kernel_size - 1) / 2) if same_padding else 0
-        #self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=False)
-        self.conv = padConv2d(in_channels, out_channels, kernel_size, stride, padding=None, bias=True)
-
-        self.bn   = nn.BatchNorm2d(out_channels, momentum=0.01)
+        padding = int((kernel_size - 1) / 2) if same_padding else 0
+        
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=False)
+        self.bn = nn.BatchNorm2d(out_channels, momentum=0.01)
         self.relu = nn.LeakyReLU(0.1, inplace=True) if relu else None
 
     def forward(self, x):
@@ -35,6 +47,29 @@ class Conv2d_BatchNorm(nn.Module):
         if self.relu is not None:
             x = self.relu(x)
         return x
+
+# class Conv2d_BatchNorm(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, use_norm=True):
+#         super(Conv2d_BatchNorm, self).__init__()
+#         padding = int((kernel_size - 1) / 2) if same_padding else 0
+#         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=False)
+#         #self.bn   = nn.BatchNorm2d(in_channels, momentum=0.01)
+#         #self.conv = padConv2d(in_channels, out_channels, kernel_size, stride, padding=None, bias=True)
+            
+#         self.bn   = nn.BatchNorm2d(out_channels, momentum=0.01)
+#         self.relu = nn.LeakyReLU(0.1, inplace=True) if relu else None
+
+#     def forward(self, x):
+#         #changed to pre-activation
+#         # x = self.bn(x)
+#         # if self.relu is not None:
+#         #     x = self.relu(x)
+#         # x = self.conv(x)
+#         x = self.conv(x)
+#         x = self.bn(x)
+#         if self.relu is not None:
+#             x = self.relu(x)
+#         return x
 
 
 class FC(nn.Module):

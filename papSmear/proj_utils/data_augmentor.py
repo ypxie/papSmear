@@ -2,9 +2,6 @@
 Can easily be extended to include new transformations,
 new preprocessing methods, etc...
 '''
-
-
-
 import numpy as np
 import re
 from scipy import linalg
@@ -109,7 +106,6 @@ def transform_matrix_offset_center(matrix, x, y):
     reset_matrix = np.array([[1, 0, -o_x], [0, 1, -o_y], [0, 0, 1]])
     transform_matrix = np.dot(np.dot(offset_matrix, matrix), reset_matrix)
     return transform_matrix
-
 
 def apply_transform(x, transform_matrix, channel_index=0, fill_mode='nearest', cval=0.):
     x = np.rollaxis(x, channel_index, 0)
@@ -478,8 +474,7 @@ class Iterator(object):
         
     def reset(self):
         self.batch_index = 0
-
-
+        
     def _flow_index(self, N, batch_size=32, shuffle=True, seed=None):
         # ensure self.batch_index is 0
         number_repeat = 0
