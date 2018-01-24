@@ -17,9 +17,9 @@ import torch
 def set_args():
     parser = argparse.ArgumentParser(description = 'Testing code for pap smear detection')
     parser.add_argument('--batch-size',      type=int, default=1)
-    parser.add_argument('--device-id',       type=int, default=1)
-    parser.add_argument('--resize-ratio',    type=list, default=[0.6])
-    parser.add_argument('--load_from_epoch', type=str, default="06000")
+    parser.add_argument('--device-id',       type=int, default=0)
+    parser.add_argument('--resize-ratio',    type=list, default=[1.0])
+    parser.add_argument('--load_from_epoch', type=str, default="00050")
     parser.add_argument('--model_name',      type=str, default='yolo_pap_best')
     args = parser.parse_args()
 
@@ -27,9 +27,10 @@ def set_args():
 
 if  __name__ == '__main__':
     # Setting model, testing data and result path
-    DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    # DatasetDir = "/data/.data1/pingjun/Datasets/PapSmear"
+    DatasetDir = "/home/pingjun/GitHub/papSmear"
     model_root = os.path.join(DatasetDir, 'models')
-    data_root =  os.path.join(DatasetDir, 'data/testing')
+    data_root =  os.path.join(DatasetDir, 'data/EDF16')
     save_root =  os.path.join(DatasetDir, 'data/Results')
     mkdirs(save_root)
 

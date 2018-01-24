@@ -123,7 +123,7 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
         ori_im   = batch['origin_im'][0]
         img_name = batch['dontcare'][0]
         im_np = batch['images'][0]
-        windowsize = 512 # it has to be dividable by 32 to have no shifts.
+        windowsize = 1024 # it has to be dividable by 32 to have no shifts.
 
         _t['im_detect'].tic()
         result_dict = split_testing(net, im_np,  batch_size=4, windowsize=windowsize, thresh=thresh, cfg=cfg)

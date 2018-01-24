@@ -11,8 +11,11 @@ from papSmear.datasets.papsmear import papSmearData as Dataset
 
 if __name__ == '__main__':
     # Load dataset
-    data_root = "/data/.data1/pingjun/Datasets/PapSmear/data/training/"
-    resize_ratio = [0.3, 0.5, 0.6]
+    # data_root = "/data/.data1/pingjun/Datasets/PapSmear/data/training/"
+    # resize_ratio = [0.3, 0.5, 0.6]
+    data_root = "/home/pingjun/GitHub/papSmear/data/isbi_training/"
+    resize_ratio = [1.0, 1.0, 1.0]
+
     dataloader = Dataset(data_dir=data_root, resize_ratio=resize_ratio)
 
     # Fetch all bbox dims
@@ -21,10 +24,8 @@ if __name__ == '__main__':
     row_size_list = all_bbox[:,3] - all_bbox[:,1]
     dim_array = np.stack([col_size_list,row_size_list], axis=1)
 
-    pdb.set_trace()
-    
     # Clustered centered image dims
-    kmeans = KMeans(n_clusters=9, random_state=0).fit(dim_array)
+    kmeans = KMeans(n_clusters=5, random_state=0).fit(dim_array)
     centers = kmeans.cluster_centers_
     print("Clustered centers are:")
     print(centers)

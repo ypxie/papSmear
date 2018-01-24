@@ -181,8 +181,11 @@ def _get_next(inputs):
 
 
 class papSmearData:
-    def __init__(self, data_dir, batch_size=8, processes=8, img_shape=(256, 256),
-                 resize_ratio=[0.3, 0.5, 0.6], testing=False):
+    # def __init__(self, data_dir, batch_size=8, processes=8, img_shape=(256, 256),
+    #              resize_ratio=[0.3, 0.5, 0.6], testing=False):
+    def __init__(self, data_dir, batch_size=4, processes=4, img_shape=(336, 336),
+                 resize_ratio=[1.0, 1.0, 1.0], testing=False):
+
         self.__dict__.update(locals())
 
         all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png'], '.mat')
