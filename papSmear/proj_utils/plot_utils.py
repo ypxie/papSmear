@@ -108,6 +108,7 @@ def plot_img(X=None, win= None, env=None, plot=None,port=_port):
     if plot is None:
         plot = Visdom(port = port)
     if X.ndim == 2:
+        #norm_img = normalize_img(X)
         plot.heatmap(X=np.flipud(X), win=win, #
                  opts=dict(title=win), env=env)
     elif X.ndim == 3:

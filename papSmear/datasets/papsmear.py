@@ -1,10 +1,11 @@
 import pickle
-import os
+import os, sys
 import uuid
-import cv2
+import cv2, openslide
 import xml.etree.ElementTree as ET
 
-import h5py, time
+import h5py, time, copy
+
 import numpy as np
 import scipy.sparse
 import scipy.ndimage as ndi
@@ -19,6 +20,21 @@ from multiprocessing import Pool
 # from utils.yolo import preprocess_train
 debug_mode = False
 fill_val = np.pi * 1e-8
+
+def crop_svs(slide_path, location=[0,0], level=0, size=None):
+    #size (col, row) wise, same for location
+    # SlideWidth, SlideHeight = slide_img.level_dimensions[0]
+    slide_img  = openslide.open_slide(slide_path)
+    SlideWidth,  SlideHeight = slide_img.level_dimensions[0]
+    size = [SlideWidth, SlideHeight] if size is None else size
+    # read_region(location, level, size)
+    # 	location (tuple) – (x, y) tuple giving the top left pixel in the level 0 reference frame
+    # 	level (int) – the level number
+    # 	size (tuple) – (width, height) tuple giving the region size
+    cur_patch = slide_img.read_region(location, level, size)
+
+    return cur_patch
+
 
 @jit
 def get_bbox(contour_mat):
@@ -54,15 +70,15 @@ def change_val(img,val, len, x_min, y_min, x_max, y_max):
         img[y_max_:y_max_+1, x_min_:x_max_] = val
     return img
 
-def safe_boarder(xcontour, ycontour, row, col):
+def safe_boarder(xcontour, ycontour, row, col, rs=0, cs=0):
     '''
     board_seed: N*2 represent row and col for 0 and 1 axis.
     '''
-    xcontour[xcontour[:,0] < 0] = 0
-    xcontour[xcontour[:,0] >= col] = col-1
+    xcontour[xcontour < cs] = cs
+    xcontour[xcontour >= col] = col-1
 
-    ycontour[ycontour[:,0] < 0] = 0
-    ycontour[ycontour[:,0] >= row] = row-1
+    ycontour[ycontour < rs] = rs
+    ycontour[ycontour >= row] = row-1
     
     return xcontour, ycontour
 
@@ -76,10 +92,50 @@ def overlay_bbox(img, bbox,linewidth=1):
         img[:,:,2] = change_val(img[:,:,2], 0, linewidth,  x_min_, y_min_, x_max_, y_max_)
     return img
 
-def get_single_mask(thiscontour, mask_size, board_ratio = 0.1):
+def get_single_mask(thiscontour, mask_size, mask_bbox, left_board_ratio=0.1, right_board_ratio=0.1):
+    #row_size, col_size = mask_size
+    #boarder_row = int(board_ratio * row_size)
+    #boarder_col = int(board_ratio * col_size)
+    xmin, ymin, xmax, ymax = mask_bbox
+
+    bbox_row, bbox_col = int(ymax-ymin+1), int(xmax-xmin+1)
+    #left_boarder_row, right_boarder_row = int(left_board_ratio * bbox_row),  int(right_board_ratio * bbox_row)
+    #left_boarder_col, right_boarder_col = int(left_board_ratio * bbox_col),  int(right_board_ratio * bbox_col)
+
+    xcontour = np.reshape(thiscontour[0,:], (1,-1) ).copy()
+    ycontour = np.reshape(thiscontour[1,:], (1,-1) ).copy()
+
+    #x_min, x_max = np.min(xcontour), np.max(xcontour)
+    #y_min, y_max = np.min(ycontour), np.max(ycontour)
+    #print('1: ', xmin, ymin, xmax, ymax  )
+    #print('2: ', x_min, y_min, x_max, y_max  )
+
+    norm_xcont = (xcontour - xmin)
+    norm_ycont = (ycontour - ymin)
+
+    #print(bbox_row, bbox_col, (y_max - y_min + 1, x_max-x_min + 1) )
+    #print(left_board_ratio, right_board_ratio)
+    #print('xcontour: ', xcontour[0,0::5])
+    #print('ycontour: ', ycontour[0,0::5])
+    #import pdb; pdb.set_trace()
+    norm_xcont, norm_ycont = safe_boarder(norm_xcont.copy(), norm_ycont.copy(), bbox_row,  bbox_col)
+    
+    tempmask = roipoly(bbox_row, bbox_col, norm_xcont, norm_ycont)
+    
+    large_mask = imresize_shape(tempmask, mask_size)
+    large_mask = (large_mask>100).astype(np.float32)
+    
+    #imshow(large_mask)
+    #import pdb; pdb.set_trace()
+    return large_mask
+
+def _get_single_mask(thiscontour, mask_size, left_board_ratio=0.1, right_board_ratio=0.1):
     row_size, col_size = mask_size
-    boarder_row = int(board_ratio * row_size)
-    boarder_col = int(board_ratio * col_size)
+    #boarder_row = int(board_ratio * row_size)
+    #boarder_col = int(board_ratio * col_size)
+
+    left_boarder_row, right_boarder_row = int(left_board_ratio * row_size),  int(right_board_ratio * row_size)
+    left_boarder_col, right_boarder_col = int(left_board_ratio * col_size),  int(right_board_ratio * col_size)
 
     xcontour = np.reshape(thiscontour[0,:], (1,-1) )
     ycontour = np.reshape(thiscontour[1,:], (1,-1) )
@@ -89,8 +145,9 @@ def get_single_mask(thiscontour, mask_size, board_ratio = 0.1):
     temprow = y_max - y_min + 1
     tempcol = x_max - x_min + 1
     
-    choped_row = row_size - 2* boarder_row
-    choped_col = col_size - 2* boarder_col
+
+    choped_row = row_size -  left_boarder_row - right_boarder_row
+    choped_col = col_size -  left_boarder_col - right_boarder_col
     
     x_ratio = float(choped_col )/tempcol
     y_ratio = float(choped_row )/temprow
@@ -98,19 +155,26 @@ def get_single_mask(thiscontour, mask_size, board_ratio = 0.1):
     norm_xcont = (xcontour - x_min)*x_ratio
     norm_ycont = (ycontour - y_min)*y_ratio
 
-    norm_xcont, norm_ycont = safe_boarder(norm_xcont,norm_ycont, choped_row, choped_col)
-    tempmask = roipoly(choped_row, choped_col, norm_xcont, norm_ycont)
-    large_mask = np.zeros((row_size, col_size))
-    large_mask[boarder_row:boarder_row+choped_row, boarder_col:boarder_col+choped_col ] = tempmask
+    real_chop_row, real_chop_col = min(row_size, choped_row), min(col_size, choped_col)
+    norm_xcont, norm_ycont = safe_boarder(norm_xcont, norm_ycont, real_chop_row, real_chop_col)
+
+    tempmask = roipoly(real_chop_row, real_chop_col, norm_xcont, norm_ycont)
+    large_mask = np.zeros((row_size, col_size), dtype=np.float32)
+    
+    rs, cs = max(0, left_boarder_row), max(0, left_boarder_col)
+    large_mask[rs:rs+real_chop_row, cs:cs+real_chop_col ] = tempmask
 
     return large_mask
 
-def get_anchor(row_size, col_size, img_shape, boarder=0):
+def get_anchor(row_size, col_size, img_shape, img, boarder=0):
     dst_row, dst_col = img_shape
     br, bc = int(boarder*row_size), int(boarder*col_size)
-     
-    upleft_row  = random.randint(br, row_size - dst_row - br)
-    upleft_col  = random.randint(bc, col_size - dst_col - bc)
+    idx = 0
+    while idx <= 5:
+        upleft_row  = random.randint(br, row_size - dst_row - br)
+        upleft_col  = random.randint(bc, col_size - dst_col - bc)
+        if img[upleft_row, upleft_col, 0] != fill_val:
+            break
     return (upleft_row, upleft_col)
          
 def resize_mat(contour_mat, resize_ratio):
@@ -134,6 +198,8 @@ def crop_bbox(bbox_list, contour_mat, r_min, c_min, r_max, c_max, mask_size, get
         y_min = y_min_  - r_min
         y_max = y_max_  - r_min
         
+        thiscontour = thiscontour - np.array([[c_min],[r_min]]  )
+
         row_size = r_max - r_min + 1
         col_size = c_max - c_min + 1
         
@@ -150,22 +216,32 @@ def crop_bbox(bbox_list, contour_mat, r_min, c_min, r_max, c_max, mask_size, get
             new_row_len = y_max - y_min + 1
             #old_row_len = y_max_-y_min_ +1
             
-            if (new_row_len > 0.6 *old_row_len ) and (new_col_len > 0.6 *old_col_len ):
+            if (new_row_len > 0.8 *old_row_len ) and (new_col_len > 0.8 *old_col_len ):
                 new_bbox.append([x_min, y_min, x_max, y_max] )    
         else:
             new_bbox.append([x_min, y_min, x_max, y_max])
 
-            boarder_row = int(board_ratio * old_row_len)
-            boarder_col = int(board_ratio * old_col_len)
+            left_board_ratio, right_board_ratio = np.random.uniform(-0.06, 0.15), np.random.uniform(-0.06, 0.15)
+
+            left_boarder_row, right_boarder_row = int(left_board_ratio * old_row_len),  int(right_board_ratio * old_row_len)
+            left_boarder_col, right_boarder_col = int(left_board_ratio * old_col_len),  int(right_board_ratio * old_col_len)
+
+            #boarder_row = int(board_ratio * old_row_len)
+            #boarder_col = int(board_ratio * old_col_len)
             
-            xmin, ymin = x_min - boarder_col, y_min - boarder_row
-            xmax, ymax = x_max + boarder_col, y_max + boarder_col
+            xmin, ymin = x_min - left_boarder_col,  y_min - left_boarder_row
+            xmax, ymax = x_max + right_boarder_col, y_max + right_boarder_row
+
+            #xmin, ymin = x_min - 1,  y_min - 1
+            #xmax, ymax = x_max + 1,  y_max + 1
 
             if not (xmin < 0 or ymin < 0 or xmax >=  row_size or ymax >= col_size):
-                
-                mask_bbox_list.append([xmin, ymin, xmax, ymax])
+                #import pdb; pdb.set_trace()
+                mask_bbox = [xmin, ymin, xmax, ymax]
+                mask_bbox_list.append(mask_bbox)
                 if get_mask:
-                    this_mask = get_single_mask(thiscontour, mask_size, board_ratio=board_ratio)
+                    this_mask = get_single_mask(thiscontour, mask_size,  mask_bbox,
+                                left_board_ratio=left_board_ratio, right_board_ratio=right_board_ratio)
                 else:
                     this_mask = None
                 mask_list.append(this_mask)
@@ -218,12 +294,13 @@ def apply_transform_(x, transform_matrix, offset,  fill_mode='constant', cval=0.
     
     return x
 
-def apply_transform(x, transform_matrix,  fill_mode='reflect', cval = fill_val, output_shape=None):
+def apply_transform(x, transform_matrix,  fill_mode='constant', cval = fill_val, output_shape=None):
     final_affine_matrix = transform_matrix[:2, :2]
     final_offset   = transform_matrix[:2, 2]
     channel_images = [ndi.interpolation.affine_transform(x[:,:,cidx], final_affine_matrix, 
                       final_offset, order=2, mode=fill_mode, 
                       cval=cval, output_shape= output_shape, ) for cidx in range(x.shape[2])]
+    
     x = np.stack(channel_images, axis=2)
     return x
 
@@ -286,6 +363,7 @@ def rotate_pair(inputs):
         rot_contour.append(thiscontour) 
 
     #rot_contour = rotate_mat(contour_mat, cont_rotation_matrix)
+    #imshow(rot_img)
     return rot_img, rot_contour
 
 def _get_next(inputs):
@@ -295,37 +373,42 @@ def _get_next(inputs):
     org_img = imread(img_path).astype(float) if debug_mode else img_data #
     org_mat = load_mat(mat_path, contourname_list=['Contours']) if debug_mode else mat_data #
     # here we apply rotation transformation
-    #if random.random() > 0.75:
-    #   theta = np.pi / 180 * np.random.uniform(0, 360)
-    #   org_img, org_mat =  rotate_pair(  (org_img, org_mat, theta) )
-    
+    #if random.random() > 0:
+    #    import pdb; pdb.set_trace()
+    #    theta = np.pi / 180 * np.random.uniform(0, 360)
+    #    org_img, org_mat =  rotate_pair(  (org_img, org_mat, theta, 0.99) )
+    org_row, org_col, _  = org_img.shape
+
     try_box = 0
     while try_box <= 5:
         try_count = 0 
         mask_list = []
-
+        dst_row, dst_col = img_shape
+        
         while True:
             chosen_ratio = resize_ratio[random.randint(0, len(resize_ratio)-1)]
-            
-            if try_count >= 10:
-                chosen_ratio = 1.1 * max( float(dst_row)/float(row_size), 
-                                        float(dst_col)/float(col_size))
+            if try_count >= 5:
+                chosen_ratio = 1.1 * max( float(dst_row)/float(org_row), 
+                                          float(dst_col)/float(org_col))
+                #print('chosen ratio: ', chosen_ratio, org_img.shape, img_shape, try_count)
 
-            res_img = imresize(org_img, chosen_ratio)
-            res_mat = resize_mat(org_mat, chosen_ratio)
-
-            row_size, col_size, _ = res_img.shape
-            
             if testing is True:
-                img_shape = [row_size, col_size]
-            dst_row, dst_col = img_shape
+                dst_row = int(org_row*chosen_ratio)
+                dst_col = int(col_size*chosen_ratio)
 
-            if row_size >= dst_row and col_size >= dst_col:
-                up_r, up_c = get_anchor(row_size, col_size, img_shape, boarder=0)
+            if int(org_row*chosen_ratio) >= dst_row and int(org_col*chosen_ratio) >= dst_col:
+                res_img = imresize(org_img, chosen_ratio)
+                res_mat = resize_mat(org_mat, chosen_ratio)
+                row_size, col_size, _ = res_img.shape
+                up_r, up_c = get_anchor(row_size, col_size, img_shape, img=res_img, boarder=0)
+                #print('suc',up_r, up_c, chosen_ratio, res_img.shape, org_img.shape, img_shape, try_count)
                 break
             else:
+                #print('fail', chosen_ratio,  org_img.shape, img_shape, try_count)
                 try_count += 1
                 continue   
+
+            
 
         bbox =  get_bbox(res_mat)
         r_min, c_min, r_max, c_max = up_r, up_c, up_r+dst_row, up_c+dst_col
@@ -345,7 +428,7 @@ def _get_next(inputs):
     return (this_patch, this_bbox, classes, img_path, res_img, mask_list, mask_bbox_list)
 
 class papSmearData:
-    def __init__(self, data_dir, batch_size, img_shape=None, processes= 4, 
+    def __init__(self, data_dir, batch_size=16, img_shape=None, processes= 4, 
                  testing= False, resize_ratio=[0.3, 0.5, 0.6], aug_rate = 1):
         self.__dict__.update(locals())
         
@@ -356,8 +439,12 @@ class papSmearData:
         self.img_list  = self.img_list_ if debug_mode else [imread(img_path) for img_path in self.img_list_]
         self.mat_list  = self.mat_list_ if debug_mode else [load_mat(mat_path, contourname_list=['Contours']) for mat_path in self.mat_list_]
         
-        self.aug_img_list  = [this_img.copy()   for this_img in self.img_list] 
-        self.aug_mat_list  = [this_mat.copy()  for this_mat in self.mat_list] 
+        # for idx, this_mat in enumerate(self.mat_list):
+        #     if this_mat is None:
+        #         print(self.mat_list_[idx])
+
+        self.aug_img_list  = [copy.deepcopy(this_img)   for this_img in self.img_list] 
+        self.aug_mat_list  = [copy.deepcopy(this_mat)   for this_mat in self.mat_list]
         
         self.img_num      = len(all_dict_list)
         self.img_shape    = img_shape
@@ -415,7 +502,7 @@ class papSmearData:
                 batch['mask_bbox_list'].append(mask_bbox_list)
             i += 1
             
-        img_array = np.stack(batch['images'], 0)
+        img_array = np.stack(batch['images'], 0).astype(np.float32)
         batch['images'] = img_array * (2. / 255) - 1.
         
         if self.start >= self.img_num:
@@ -431,10 +518,12 @@ class papSmearData:
             if self._epoch!= 0 and (self._epoch % self.aug_rate == 0):
                 # rotate all the images at each epoch
                 start_timer = time.time()
-
+                rotation_pool = [90, 180, 270]
                 num_imgs = len(self.mat_list)
+                #roates_pool = self.pool.imap(rotate_pair,
+                #      ((self.img_list[i], self.mat_list[i], np.pi / 180 * random.choice(rotation_pool), 0) for i in range(num_imgs)) ) 
                 roates_pool = self.pool.imap(rotate_pair,
-                      ((self.img_list[i], self.mat_list[i], np.pi / 180 * np.random.uniform(0, 360), 0.4) for i in range(num_imgs)) ) 
+                      ((self.img_list[i], self.mat_list[i], np.pi / 180 * np.random.uniform(0, 360), 0.5) for i in range(num_imgs)) ) 
 
                 for iidx in range(num_imgs ):
                     aug_img, aug_mat = roates_pool.__next__()
@@ -466,10 +555,10 @@ class papSmearData:
     def get_all_bbox(self):
         bbox_all = []
         for idx in range(self.img_num):
-            img_path, mat_path = self.img_list[idx], self.mat_list[idx]
-            org_mat = self.load_mat(mat_path, contourname_list=['Contours'])
+            img_path, mat_path = self.img_list_[idx], self.mat_list_[idx]
+            org_mat = load_mat(mat_path, contourname_list=['Contours'])
             for chosen_ratio in self.resize_ratio:
-                res_mat = self.resize_mat(org_mat, chosen_ratio)
+                res_mat = resize_mat(org_mat, chosen_ratio)
                 bbox =  get_bbox(res_mat)
                 bbox_all.extend(bbox)
         return np.asarray(bbox_all)
@@ -499,12 +588,14 @@ class papSmearData:
     @property
     def batch_per_epoch(self):
         return (self.img_num + self.batch_size -1) // self.batch_size
-      
+
+
+
 class testingData:
-    def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True):
+    def __init__(self, data_dir, batch_size, resize_ratio=[0.5], test_mode=True, read_cvs=False):
         self.__dict__.update(locals())
 
-        all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png', '.tif'], '.mat', test_mode=True)
+        all_dict_list  = getfileinfo(self.data_dir, ['_gt'], ['.png', '.tif', '.svs'], '.mat', test_mode=True)
         self.img_list_ = [this_dict['thisfile']    for this_dict in all_dict_list] 
         
         self.img_list  = self.img_list_
@@ -512,12 +603,13 @@ class testingData:
         self.img_num      = len(all_dict_list)
 
         self.resize_ratio = resize_ratio
-        self.test_mode = test_mode
+        self.test_mode    = test_mode
         self.overlay_bbox = overlay_bbox
         self._classes = ['fake class']
         self._epoch = 0
         self.count = 0
-        
+        self.read_cvs = read_cvs
+
         self._shuffle = True
 
         self.indices = list(range(self.img_num))
@@ -527,8 +619,11 @@ class testingData:
         batch = {'images': [], 'gt_boxes': [], 'gt_classes': [], 'dontcare': [], 'origin_im': []}
         img_path = self.img_list[self.count]
         self.count += 1
+        if not self.read_cvs: 
+            org_img  = imread(img_path) 
+        else:
+            org_img  = crop_svs(img_path, location=[0,0], level=0, size=None)
 
-        org_img  = imread(img_path) 
         chosen_ratio = self.resize_ratio[0]  
         res_img = imresize(org_img, chosen_ratio)
         res_img = res_img.transpose(2, 0, 1)
@@ -564,4 +659,5 @@ class testingData:
     @property
     def batch_per_epoch(self):
         return (self.img_num + self.batch_size -1) // self.batch_size
+
 

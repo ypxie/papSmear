@@ -3,7 +3,9 @@ import math
 import numpy as np
 import pickle
 import torch
+from numba import jit
 from torch.multiprocessing import Pool
+import cv2
 
 import deepdish as dd
 from .utils.timer import Timer
@@ -16,6 +18,9 @@ from .proj_utils.model_utils import resize_layer
 from torch.autograd import Variable
 
 thresh = 0.5
+ext_len = 0
+windowsize = 256-ext_len # it has to be dividable by 32 to have no shifts.
+
 def batch_forward(cls, BatchData, batch_size, **kwards):
     total_num = BatchData.shape[0]
     results = {'bbox':[],'iou':[], 'prob':[]}
@@ -50,7 +55,7 @@ def split_testing(cls, img,  batch_size = 4, windowsize=None, thresh= None, cfg=
     else:
         row_window = min(windowsize, row_size)
         col_window = min(windowsize, col_size)
-
+    
     # print(row_window, col_window)
     num_row, num_col = math.ceil(row_size/row_window),  math.ceil(col_size/col_window) # lower int
     feat_map = None
@@ -66,7 +71,7 @@ def split_testing(cls, img,  batch_size = 4, windowsize=None, thresh= None, cfg=
                 col_start = col_size - col_window
             col_end   = col_start + col_window
 
-            this_patch = img[:, row_start:row_end, col_start:col_end][None]
+            this_patch = img[:, row_start:row_end+ext_len, col_start:col_end+ext_len][None]
 
             #print('this_patch shape: ', this_patch.shape)
             batch_data = to_device(this_patch, cls.device_id, volatile=True)
@@ -77,12 +82,13 @@ def split_testing(cls, img,  batch_size = 4, windowsize=None, thresh= None, cfg=
             prob_pred = prob_pred.cpu().data.numpy()
             large_map = large_map
 
-            
             if feat_map is None:
                 chnn = large_map.size()[1]
                 feat_map = Variable(torch.zeros(1, chnn, row_size, col_size), volatile=True)
 
-            feat_map[:,:, row_start:row_end, col_start:col_end] = large_map
+            #print(large_map[:,:, 0:row_end-row_start, 0:col_end-col_start].size(), feat_map[:,:, row_start:row_end, col_start:col_end].size())
+
+            feat_map[:,:, row_start:row_end, col_start:col_end] = large_map[:,:, 0:row_end-row_start, 0:col_end-col_start]
 
             H, W = cls.out_size
             x_ratio, y_ratio = cls.x_ratio, cls.y_ratio
@@ -197,27 +203,39 @@ def mask2contour(mask_pred, org_size_list, org_coord_list, patch_list, img_size)
 
         thiscontour[thiscontour[:,1] < 0, 1] = 0
         thiscontour[thiscontour[:,1] >= img_row_size, 1] = img_row_size-1
-        
         contour_list.append(thiscontour)
+
     return contour_list
 
-def mark_contours(images, contour_list):        
-    images = np.transpose(images, (1,2,0))
+
+#@jit(nopython=True)
+def make_contour_mask(images, contour_list):
+    row, col = images.shape[0:2]
+    mask = np.zeros((row, col))
     for idx, this_contour in enumerate(contour_list):
-        print("{}_th_contour shape: ".format(idx), this_contour.shape)
+        #print("{}_th_contour shape: ".format(idx), this_contour.shape)
         this_contour = this_contour.astype(int)
         col, row = this_contour[:,0],this_contour[:,1]
-        
-        #print(images.shape)
-        images[row,col,:] = 0
-        #for idx in range(this_contour.shape[0]):
-        #    x, y = this_contour[idx,0],this_contour[idx,1]
-        #    images[x,y,:] = 0
+        mask[row,col] = 1
+    return mask
+
+def mark_contours(images, contour_list):        
+    #images = np.transpose(images, (1,2,0)).copy()
+    mask = make_contour_mask(images, contour_list)
+    
+    se = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
+    contour_mask = cv2.dilate(mask, se)
+    
+    contour_mask = contour_mask > 0
+    
+    images[contour_mask,0] = 165
+    images[contour_mask,1] = 42
+    images[contour_mask,2] = 42
     return images
     
-def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
-    save_folder = os.path.join(save_root, mode_name)
-    save_masked_folder = os.path.join(save_root, mode_name, 'masked_contour')
+def test_eng(dataloader, model_root, save_folder, mode_name, net, args, cfg):
+    #save_folder = os.path.join(save_root)
+    save_masked_folder = os.path.join(save_folder, 'masked_contour')
     mkdirs([save_folder, save_masked_folder])
 
     net.eval()
@@ -235,12 +253,12 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
     print('num_images: ', num_images)
 
     _t = {'im_detect': Timer(), 'misc': Timer()}
-    for i in range(num_images): # batch size has to be 1.
+    for i in range(0,num_images): # batch size has to be 1.
         batch      = dataloader.next()
         ori_im     = batch['origin_im'][0]
         img_name   = batch['dontcare'][0]
         im_np      = batch['images'][0]
-        windowsize = 512 # it has to be dividable by 32 to have no shifts.
+        
 
         _t['im_detect'].tic()
         result_dict = split_testing(net, im_np,  batch_size=4, windowsize=windowsize, thresh=thresh, cfg=cfg)
@@ -254,29 +272,51 @@ def test_eng(dataloader, model_root, save_root, mode_name, net, args, cfg):
         utils_time = _t['misc'].toc()
 
         # from bboxes to feat and to mask
-        print(bboxes.shape)
+        #print(bboxes.shape)
         # bbox N*4, (xs, ys, xe, ye)
-        if 1:
-            cropped_feat, org_size_list, org_coord_list ,patch_list= get_feat_bbox(bboxes[None], feat_map, dest_size=[64,64], org_img= im_np)
-            mask_pred    = batch_mask_forward(net.seg_net, cropped_feat, batch_size=128 )
-            mask_pred    = mask_pred.data.cpu().numpy()
-            binary_mask  = mask_pred > 0.4
-            contour_list = mask2contour(binary_mask, org_size_list, org_coord_list, patch_list, im_np.shape[1::])
-            contour_list = [this_contour /args.resize_ratio[0] for this_contour in contour_list]
-            naked_name   = os.path.splitext(img_name)[0]
-            resultsDict = {'bbox':bboxes, 'contour':contour_list}
-            resultDictPath = os.path.join(save_folder, naked_name + '_res.h5')
-            dd.io.save(resultDictPath, resultsDict, compression=None)    #compression='zlib'        
-            
-            marked_images = mark_contours(ori_im.copy(), contour_list).astype(np.uint8)
-            writeImg(marked_images, os.path.join(save_masked_folder, img_name))
+        
 
         print('{}/{} detection time {:.4f}, post_processing time {:.4f}'.format(i+1, num_images, detect_time, utils_time))
         ori_im = ori_im.transpose(1,2,0)
 
-        bboxes = bboxes / args.resize_ratio[0]
-        overlaid_img = dataloader.overlay_bbox(ori_im.copy(), bboxes, linewidth=6).astype(np.uint8)
+        resized_bboxes = bboxes / args.resize_ratio[0]
+        overlaid_img = dataloader.overlay_bbox(ori_im.copy(), resized_bboxes, linewidth=6).astype(np.uint8)
         writeImg(overlaid_img, os.path.join(save_folder, img_name))
+        
+        # do segmentation
+        if 1:
+            cropped_feat, org_size_list, org_coord_list ,patch_list= get_feat_bbox(bboxes[None], feat_map, dest_size=[64,64], org_img= im_np)
+            mask_pred    = batch_mask_forward(net.seg_net, cropped_feat, batch_size=128 )
+            mask_pred    = mask_pred.data.cpu().numpy()
+            binary_mask  = mask_pred > 0.6
+            contour_list = mask2contour(binary_mask, org_size_list, org_coord_list, patch_list, im_np.shape[1::])
+            contour_list = [this_contour /args.resize_ratio[0] for this_contour in contour_list]
+            naked_name   = os.path.splitext(img_name)[0]
+            resultsDict = {'bbox':resized_bboxes, 'contour':contour_list}
+            resultDictPath = os.path.join(save_folder, naked_name + '_res.h5')
+            dd.io.save(resultDictPath, resultsDict, compression=None)    #compression='zlib'        
+            
+            #marked_images = mark_contours(overlaid_img.copy(), contour_list).astype(np.uint8)
+            marked_images = mark_contours(ori_im.copy(), contour_list).astype(np.uint8)
+            writeImg(marked_images, os.path.join(save_masked_folder, img_name))
+        
+        # do classification
+        if 1:
+            cropped_feat, org_size_list, org_coord_list ,patch_list= get_feat_bbox(bboxes[None], feat_map, dest_size=[64,64], org_img= im_np)
+            mask_pred    = batch_mask_forward(net.seg_net, cropped_feat, batch_size=128 )
+            mask_pred    = mask_pred.data.cpu().numpy()
+            binary_mask  = mask_pred > 0.6
+            contour_list = mask2contour(binary_mask, org_size_list, org_coord_list, patch_list, im_np.shape[1::])
+            contour_list = [this_contour /args.resize_ratio[0] for this_contour in contour_list]
+            naked_name   = os.path.splitext(img_name)[0]
+            resultsDict = {'bbox':resized_bboxes, 'contour':contour_list}
+            resultDictPath = os.path.join(save_folder, naked_name + '_res.h5')
+            dd.io.save(resultDictPath, resultsDict, compression=None)    #compression='zlib'        
+            
+            #marked_images = mark_contours(overlaid_img.copy(), contour_list).astype(np.uint8)
+            marked_images = mark_contours(ori_im.copy(), contour_list).astype(np.uint8)
+            writeImg(marked_images, os.path.join(save_masked_folder, img_name))
+        
 
         # mark the contours on the images
         

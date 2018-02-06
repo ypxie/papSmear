@@ -49,7 +49,7 @@ def get_pair_mask(mask_bbox_list, mask_list, featMaps, net, img_list, max_sample
 
     if  len(croped_feat_list) > 0:
         data_torch = torch.cat(croped_feat_list, 0).detach()
-        np_corresponding_mask_nd = np.stack(corresponding_mask_list, 0)
+        np_corresponding_mask_nd = np.stack(corresponding_mask_list, 0).astype(np.float32)
         #data_torch = to_device(data_np, net.device_id, requires_grad=False)
         mask_torch = to_device(np_corresponding_mask_nd, net.device_id, requires_grad=False)
 
@@ -84,7 +84,7 @@ def train_eng(dataloader, model_root, mode_name, net, args):
     net.train()
     lr = args.lr
     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=args.momentum, weight_decay=args.weight_decay)
-
+    
     loss_train_plot = plot_scalar(name = "loss_train", env= mode_name, rate = args.display_freq)
     loss_bbox_plot  = plot_scalar(name = "loss_bbox",   env= mode_name, rate = args.display_freq)
     loss_iou_plot   = plot_scalar(name = "loss_iou",     env= mode_name, rate = args.display_freq)
@@ -197,10 +197,14 @@ def train_eng(dataloader, model_root, mode_name, net, args):
                 total_pred_np, cropped_mask_np = total_pred.data.cpu().numpy(), cropped_mask.data.cpu().numpy()
                 cropped_feat_np  = cropped_feat.data.cpu().numpy()
                 #print(cropped_mask_np.shape, total_pred_np.shape, cropped_feat_np.shape )
-                img_disply = [cropped_mask_np[0:1,0:1], total_pred_np[0:1,0:1],  cropped_feat_np[0:1,0:1] ]
+                img_disply = [cropped_mask_np[0:1,0:1],  cropped_feat_np[0:1,0:1], total_pred_np[0:1,0:1],]
 
                 returned_img = save_images(img_disply, save_path=None, save=False, dim_ordering='th')
+                
                 plot_img(X=returned_img, win='show_seg_traininig', env=mode_name)
+
+                print(im[0][0].shape, im.dtype, returned_img.dtype, returned_img.shape)
+                plot_img(X=im[0][0], win='cropped_img', env=mode_name)
 
             train_loss = 0
             bbox_loss, iou_loss, cls_loss = 0., 0., 0.

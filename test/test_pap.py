@@ -17,6 +17,8 @@ import torch
 proj_root = os.path.join('..')
 home = os.path.expanduser('~')
 model_root = os.path.join(proj_root, 'Model')
+read_cvs = False
+
 #-------------------isbi14-----------------------------
 if 0:
     from papSmear.darknet import BreastNet as Darknet
@@ -26,23 +28,34 @@ if 0:
     resize_ratio = [0.8]
 
 #-------------------papSmear-----------------------------
-if 1:
+if 0:
     from papSmear.darknet import Darknet19 as Darknet
     data_root   = os.path.join(home, 'DataSet','papSmear','ValDataset')
-    data_root   = os.path.join(home, 'DataSet','papSmear','TrainDataset')
+    #data_root   = os.path.join(home, 'DataSet','papSmear','TrainDataset')
 
     seg_inchan = 35
     model_name = 'papSmear_{}'.format(seg_inchan)
-    load_from_epoch = 1200
-    resize_ratio = [0.8] 
+    load_from_epoch = 8000
+    resize_ratio = [0.5] 
 #-------------------breast-----------------------------
-if 0:
+if 1:
     from papSmear.darknet import BreastNet as Darknet
     data_root   = os.path.join(home, 'DataSet','yoloSeg', 'test','breast')
     seg_inchan = 35
     model_name = 'breast_yolo_{}'.format(seg_inchan)
-    load_from_epoch = 15000
+    load_from_epoch = 19500
     resize_ratio = [1]
+
+#-------------------WSI-----------------------------
+if 0:
+    from papSmear.darknet import Darknet19 as Darknet
+    data_root   = os.path.join('/data/main/PapSmear/WSI/Moffitt41')
+    #data_root   = os.path.join(home, 'DataSet','papSmear','TrainDataset')
+    seg_inchan = 35
+    model_name = 'papSmear_{}'.format(seg_inchan)
+    load_from_epoch = 6150
+    resize_ratio = [0.5] 
+    read_cvs = True
 
 def set_args():
     parser = argparse.ArgumentParser(description = 'Testing code for pap smear detection')
@@ -72,7 +85,7 @@ if  __name__ == '__main__':
     args = set_args()
 
     # Dataloader setting
-    dataloader = Dataset(data_root, args.batch_size, resize_ratio=args.resize_ratio, test_mode=True)
+    dataloader = Dataset(data_root, args.batch_size, resize_ratio=args.resize_ratio, test_mode=True, read_cvs=read_cvs)
     # Set Darknet
     net = Darknet(cfg)
 
@@ -85,4 +98,5 @@ if  __name__ == '__main__':
         
     print('>> START testing ')
     model_name ='{}'.format(args.model_name)
-    test_eng(dataloader, model_root, save_root, model_name, net, args, cfg)
+    save_folder = os.path.join(save_root, model_name+"_epoch_{}".format(load_from_epoch))
+    test_eng(dataloader, model_root, save_folder, model_name, net, args, cfg)

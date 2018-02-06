@@ -34,7 +34,7 @@ def resize_layer(inputs, sizes):
         max_row = max(dst_row, org_row)
         max_col = max(dst_col, org_col)
         max_inputs = F.upsample_bilinear(inputs, (max_row, max_col) )    
-
+        
         return F.adaptive_avg_pool2d(max_inputs, (dst_row, dst_col))
 
 ## Weights init function, DCGAN use 0.02 std
@@ -456,7 +456,7 @@ class LayerNormal(nn.Module):
 
 class ConvBN(nn.Module):
     def __init__(self, inChans, outChans, activ=True, dilation=1, 
-                 act= None, kernel_size = 3, norm='bn'):
+                 use_activ= False, kernel_size = 3, norm='bn'):
         super(ConvBN, self).__init__()
         
         redu = dilation*(kernel_size - 1)
@@ -465,21 +465,23 @@ class ConvBN(nn.Module):
         
         self.conv = padConv2d(inChans, outChans, kernel_size=kernel_size, padding= None, dilation=dilation)
         self.norm = getNormLayer(norm)(outChans)
-        self.act  = Activation(outChans, activ = activ) if act is not None else passthrough()
+        self.act  = Activation(outChans, activ = activ) if use_activ is True else passthrough()
 
     def forward(self, x):
         out = self.norm(self.act(self.conv(x)))
         return out
 
-def _make_nConv(inChans, outChans, depth, activ = True, 
-                dilation_list=1, norm = 'bn'):
+def _make_nConv(inChans, outChans, depth, activ = True, dilation_list=1, norm = 'bn', use_activ=False):
     layers = []
     if type(dilation_list) is not list:
         dilation_list = [dilation_list]*depth
-    if depth >= 1 :
-        layers.append(ConvBN(inChans, outChans,activ = activ, dilation=dilation_list[0], norm=norm))
+    if depth == 1:
+        layers.append(ConvBN(inChans, outChans,activ = activ, use_activ = use_activ, dilation=dilation_list[0], norm=norm))
+        return nn.Sequential(*layers)
+    elif depth > 1 :
         for idx in range(depth-1):
-            layers.append(ConvBN(outChans,outChans,activ = activ, dilation=dilation_list[idx+1], norm=norm))
+            layers.append(ConvBN(outChans,outChans,activ = activ, use_activ = True, dilation=dilation_list[idx], norm=norm))
+        layers.append(ConvBN(inChans, outChans,activ = activ, use_activ = use_activ, dilation=dilation_list[depth-1], norm=norm))
         return nn.Sequential(*layers)
     else:
         return passthrough()
@@ -525,7 +527,6 @@ class DownTransition(nn.Module):
         out = self.act2(out)
         return out
 
-
 class UpConcat(nn.Module):
     def __init__(self, inChans, hidChans, outChans, nConvs, catChans=None, 
                  dropout=False,stride=2,activ=True, norm='bn'):
@@ -533,8 +534,8 @@ class UpConcat(nn.Module):
         super(UpConcat, self).__init__()
         #hidChans = outChans // 2
         self.outChans = outChans
-        self.drop1 = nn.Dropout2d(dropout) if dropout else passthrough()
-        self.drop2 = nn.Dropout2d(dropout) if dropout else passthrough()
+        self.drop1   = nn.Dropout2d(dropout) if dropout else passthrough()
+        self.drop2   = nn.Dropout2d(dropout) if dropout else passthrough()
         self.up_conv = nn.ConvTranspose2d(inChans, hidChans, kernel_size=3, 
                                           padding=1, stride=stride, output_padding=1)
         self.norm = getNormLayer(norm)(hidChans)
@@ -545,8 +546,8 @@ class UpConcat(nn.Module):
     def forward(self, x, skipx):
         out = self.drop1(x)
         skipxdo = self.drop2(skipx)
-        out = self.norm(self.act1(self.up_conv(out)))
-        out = match_tensor(out, skipxdo.size()[2:])
+        out  = self.norm(self.act1(self.up_conv(out)))
+        out  = match_tensor(out, skipxdo.size()[2:])
         xcat = torch.cat([out, skipxdo], 1)
         
         out  = self.conv_ops(xcat)

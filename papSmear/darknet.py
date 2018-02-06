@@ -24,12 +24,13 @@ class tinyFCN(nn.Module):
         self.register_buffer('device_id', torch.zeros(1))
         
         self.in_tr_100     = InputTransition(inchan, 32, activ = activ)
+        
         self.down_50       = DownTransition(32, 64, 1,   activ = activ)
         self.down_25       = DownTransition(64, 128, 1,  activ = activ)
         self.down_12       = DownTransition(128, 256, 1, dropout = 0.25, activ = activ)
-
+        
         self.up_25         = UpConcat(256, 128, 128, 1,  catChans= 128, dropout=0.25, activ = activ)
-        self.up_50         = UpConcat(128, 64,  64,  1,  catChans= 64, dropout=0.25, activ = activ)
+        self.up_50         = UpConcat(128, 64,  64,  1,  catChans= 64,  dropout=0.25, activ = activ)
         self.up_100        = UpConv(64, 32, activ = activ)
         self.out_tr        = OutputTransition(32, 1, 32, activ = activ)
 
@@ -147,7 +148,7 @@ def _process_batch(inputs, size_spec=None, cfg=None):
     best_ious = np.max(ious, axis=1).reshape(_iou_mask.shape)
 
     iou_penalty = 0 - iou_pred_np[best_ious < cfg.iou_thresh]
-    _iou_mask[best_ious <= cfg.iou_thresh] = cfg.noobject_scale * iou_penalty
+    _iou_mask[best_ious <= cfg.iou_thresh] = cfg.noobject_scale * iou_penalty 
     
     # locate the cell of each gt_boxes_b
     cx = (gt_boxes_b[:, 0] + gt_boxes_b[:, 2]) * 0.5 / x_ratio
@@ -305,6 +306,9 @@ class Darknet19(nn.Module):
         bsize, _, h, w = conv5.size()
         # assert bsize == 1, 'detection only support one image per batch'
         conv5_reshaped = conv5.permute(0, 2, 3, 1).contiguous().view(bsize, -1, self.cfg.num_anchors, self.cfg.num_classes + 5)
+        
+        #boundary_mask = conv5_reshaped.detach().clone().zero_()
+        #boundary_mask[]
 
         # tx, ty, tw, th, to -> sig(tx), sig(ty), exp(tw), exp(th), sig(to)
         xy_pred = F.sigmoid(conv5_reshaped[:, :, :, 0:2])
@@ -332,9 +336,9 @@ class Darknet19(nn.Module):
 
             num_boxes = sum((len(boxes) for boxes in gt_boxes))
             box_mask = box_mask.expand_as(_boxes)
-
+            
             self.bbox_loss = nn.MSELoss(size_average=False)(bbox_pred * box_mask, _boxes * box_mask) / num_boxes
-            self.iou_loss = nn.MSELoss(size_average=False)(iou_pred * iou_mask, _ious * iou_mask) / num_boxes
+            self.iou_loss  = nn.MSELoss(size_average=False)(iou_pred * iou_mask, _ious * iou_mask) / num_boxes
 
             class_mask = class_mask.expand_as(prob_pred)
             self.cls_loss = nn.MSELoss(size_average=False)(prob_pred * class_mask, _classes * class_mask) / num_boxes
